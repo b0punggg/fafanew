@@ -1,0 +1,23 @@
+name: Deploy to Server
+
+on:
+  push:
+    branches: ["main"]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: 151.106.123.209
+          username: u219974054
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            cd ~/home/u219974054/domains/dhe51.id/public_html
+            git pull origin main
