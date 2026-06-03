@@ -114,7 +114,14 @@
     $page = (isset($_POST['page']))? $_POST['page'] : 1;
     $limit = 15; // Jumlah data per halamannya
     $limit_start = ($page - 1) * $limit;
-    // echo '$limit_start='.$limit_start;
+
+    $filter_stok = isset($_POST['filter_stok']) ? $_POST['filter_stok'] : 'semua';
+    $having_sql = '';
+    if ($filter_stok === 'ada_stok') {
+      $having_sql = ' HAVING stok_juals > 0';
+    } elseif ($filter_stok === 'stok_nol') {
+      $having_sql = ' HAVING stok_juals <= 0';
+    }
 
     if(isset($_POST['search']) && $_POST['search'] == true){ // Jika ada data search yg 
       $param = mysqli_real_escape_string($conopname, $keyword);
@@ -128,16 +135,31 @@
         $sql = mysqli_query($conopname, "SELECT SUM(beli_brg.stok_jual) AS stok_juals, beli_brg.kd_brg,beli_brg.kd_bar,beli_brg.no_urut,beli_brg.kd_toko,beli_brg.stok_jual,mas_brg.nm_brg FROM beli_brg
         LEFT JOIN mas_brg ON beli_brg.kd_brg=mas_brg.kd_brg
         WHERE beli_brg.kd_toko='$kd_toko'
-        GROUP BY beli_brg.kd_brg   
+        GROUP BY beli_brg.kd_brg
+        $having_sql
         ORDER BY mas_brg.nm_brg ASC LIMIT $limit_start, $limit");
-        $sql2=mysqli_query($conopname,"SELECT count(*) AS jumlah FROM (SELECT COUNT(*) FROM beli_brg WHERE beli_brg.kd_toko='$kd_toko' GROUP BY kd_brg) jumlah"); 
+        $sql2=mysqli_query($conopname,"SELECT COUNT(*) AS jumlah FROM (
+          SELECT SUM(beli_brg.stok_jual) AS stok_juals
+          FROM beli_brg
+          WHERE beli_brg.kd_toko='$kd_toko'
+          GROUP BY beli_brg.kd_brg
+          $having_sql
+        ) jumlah"); 
       }else{
         $sql =mysqli_query($conopname, "SELECT SUM(beli_brg.stok_jual) AS stok_juals, beli_brg.kd_brg,beli_brg.kd_bar,beli_brg.no_urut,beli_brg.kd_toko,beli_brg.stok_jual,mas_brg.nm_brg FROM beli_brg
         LEFT JOIN mas_brg ON beli_brg.kd_brg=mas_brg.kd_brg
         WHERE beli_brg.kd_toko='$kd_toko' $params
-        GROUP BY beli_brg.kd_brg   
+        GROUP BY beli_brg.kd_brg
+        $having_sql
         ORDER BY mas_brg.nm_brg ASC LIMIT $limit_start, $limit");
-        $sql2=mysqli_query($conopname,"SELECT count(*) AS jumlah FROM (SELECT COUNT(*) FROM beli_brg LEFT JOIN mas_brg ON beli_brg.kd_brg=mas_brg.kd_brg WHERE beli_brg.kd_toko='$kd_toko' $params GROUP BY beli_brg.kd_brg) jumlah"); 
+        $sql2=mysqli_query($conopname,"SELECT COUNT(*) AS jumlah FROM (
+          SELECT SUM(beli_brg.stok_jual) AS stok_juals
+          FROM beli_brg
+          LEFT JOIN mas_brg ON beli_brg.kd_brg=mas_brg.kd_brg
+          WHERE beli_brg.kd_toko='$kd_toko' $params
+          GROUP BY beli_brg.kd_brg
+          $having_sql
+        ) jumlah"); 
       }	
       $get_jumlah = mysqli_fetch_array($sql2);
     }else{
@@ -159,8 +181,10 @@
         $xc = $dd['ket'];
         $userx = substr($xc,strpos($xc,'User :'),strpos($xc,', Jam')-strlen($xc));
       }
-      unset($cc,$dd,$xc); ?>
-      <tr>
+      unset($cc,$dd,$xc);
+      $row_stok_style = (floatval($data['stok_juals']) <= 0) ? ' style="background-color:#fff3f3;"' : '';
+      ?>
+      <tr<?=$row_stok_style?>>
         <td align="right"><?php echo $no.'.' ?>&nbsp;</td>
         <td align="left"><?= $data['kd_bar'];?> &nbsp;</td>
         
