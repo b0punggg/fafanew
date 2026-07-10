@@ -205,7 +205,7 @@
           }
         } else {
           // Jika printer tidak ditemukan, coba printer alternatif
-          $alt_printers = ["GP-80250N Series", "POS-80C", "ZJ-80"];
+          $alt_printers = ["GP-80250N Series", "POS-80C", "BP-LITE 80D + 80X Printer","ZJ-80"];
           $printed = false;
           
           foreach ($alt_printers as $alt_printer) {
