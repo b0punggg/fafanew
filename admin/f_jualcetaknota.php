@@ -188,7 +188,8 @@
         // Gunakan call_user_func untuk menghindari linter error
         //$printer_name = "GP-80250N Series"; // Alternatif 1
         //$printer_name = "POS-80C"; // Alternatif 2
-        $printer_name = "GP-80220(Cut) Series"; // Printer default yang digunakan sebelumnya
+        //$printer_name = "GP-80220(Cut) Series"; // Printer default yang digunakan sebelumnya
+        $printer_name = "BP-LITE 80D+80X Printer";
         
         $printer = call_user_func('printer_open', $printer_name);
         
@@ -205,7 +206,7 @@
           }
         } else {
           // Jika printer tidak ditemukan, coba printer alternatif
-          $alt_printers = ["GP-80250N Series", "POS-80C", "BP-LITE 80D + 80X Printer","ZJ-80"];
+          $alt_printers = ["GP-80250N Series", "POS-80C", "GP-80220(Cut) Series","BP-LITE 80D+80X Printer","ZJ-80"];
           $printed = false;
           
           foreach ($alt_printers as $alt_printer) {

@@ -14,7 +14,8 @@
 		}
 		
 		// Gunakan call_user_func untuk menghindari linter error
-		$printer_name = "GP-80220(Cut) Series"; // Printer default yang digunakan sebelumnya
+		//$printer_name = "GP-80220(Cut) Series"; // Printer default yang digunakan sebelumnya
+		$printer_name = "BP-LITE 80D+80X Printer";
 		$printer = call_user_func('printer_open', $printer_name);
 		
 		if ($printer) {
