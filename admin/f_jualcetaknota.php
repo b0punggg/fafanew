@@ -178,62 +178,16 @@
       $Text .= spasicenter('*TERIMA KASIH*',47+$def)."\n\n\n\n\n\n";
       $Text .= $cutPaper;
       
-      // Cek apakah fungsi printer tersedia
-      if (function_exists('printer_open')) {
-        // Definisikan konstanta PRINTER_MODE jika belum ada
-        if (!defined('PRINTER_MODE')) {
-          define('PRINTER_MODE', 2); // PRINTER_MODE = 2 untuk RAW mode
-        }
-        
-        // Gunakan call_user_func untuk menghindari linter error
-        //$printer_name = "GP-80250N Series"; // Alternatif 1
-        //$printer_name = "POS-80C"; // Alternatif 2
-        //$printer_name = "GP-80220(Cut) Series"; // Printer default yang digunakan sebelumnya
-        $printer_name = "BP-LITE 80D+80X Printer";
-        
-        $printer = call_user_func('printer_open', $printer_name);
-        
-        if ($printer) {
-          try {
-            call_user_func('printer_set_option', $printer, PRINTER_MODE, "RAW");
-            call_user_func('printer_write', $printer, $Text);    
-            call_user_func('printer_close', $printer);
-            // Log success untuk debugging
-            error_log("Thermal printing berhasil: Nota $no_fakjual dicetak ke printer $printer_name");
-          } catch (Exception $e) {
-            error_log("Error saat mencetak ke printer: " . $e->getMessage());
-            call_user_func('printer_close', $printer);
-          }
-        } else {
-          // Jika printer tidak ditemukan, coba printer alternatif
-          $alt_printers = ["GP-80250N Series", "POS-80C", "GP-80220(Cut) Series","BP-LITE 80D+80X Printer","ZJ-80"];
-          $printed = false;
-          
-          foreach ($alt_printers as $alt_printer) {
-            $printer = call_user_func('printer_open', $alt_printer);
-            if ($printer) {
-              try {
-                call_user_func('printer_set_option', $printer, PRINTER_MODE, "RAW");
-                call_user_func('printer_write', $printer, $Text);    
-                call_user_func('printer_close', $printer);
-                error_log("Thermal printing berhasil dengan printer alternatif: $alt_printer");
-                $printed = true;
-                break;
-              } catch (Exception $e) {
-                error_log("Error saat mencetak ke printer $alt_printer: " . $e->getMessage());
-                call_user_func('printer_close', $printer);
-              }
-            }
-          }
-          
-          if (!$printed) {
-            // Jika semua printer gagal, log error
-            error_log("Semua printer tidak ditemukan atau tidak dapat dibuka. Printer yang dicoba: $printer_name, " . implode(", ", $alt_printers));
-          }
+      include_once 'thermal_printer.php';
+      if (thermal_print_available()) {
+        $printResult = thermal_print_raw($Text, 'BP-LITE 80D+80X Printer');
+        $GLOBALS['thermal_last_print'] = $printResult;
+        if (!$printResult['success']) {
+          error_log("Thermal printing gagal nota $no_fakjual: " . $printResult['error']);
         }
       } else {
-        // Jika extension printer tidak tersedia, log error
-        error_log("PHP Printer extension tidak tersedia. Pastikan extension php_printer.dll sudah diaktifkan di php.ini");
+        $GLOBALS['thermal_last_print'] = array('success' => false, 'error' => 'Cetak thermal tidak tersedia');
+        error_log("Cetak thermal tidak tersedia. Aktifkan php_printer.dll atau shell_exec di Windows.");
       }
     }
     

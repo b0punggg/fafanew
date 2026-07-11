@@ -76,12 +76,14 @@
   
   mysqli_close($connect);
   
-  // CEK: Apakah ini localhost? (deteksi lebih lengkap)
+  include_once 'thermal_printer.php';
+
+  // CEK: localhost ATAU Windows PC kasir (bisa pakai domain lokal seperti tokofafa.dhe51.id)
   $http_host = isset($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : '';
   $server_name = isset($_SERVER['SERVER_NAME']) ? $_SERVER['SERVER_NAME'] : '';
   $server_addr = isset($_SERVER['SERVER_ADDR']) ? $_SERVER['SERVER_ADDR'] : '';
   
-  $isLocal = (
+  $isLocalHost = (
     $http_host == 'localhost' || 
     $http_host == '127.0.0.1' || 
     strpos($http_host, 'localhost') !== false ||
@@ -91,15 +93,12 @@
     $server_addr == '127.0.0.1' ||
     $server_addr == '::1'
   );
+
+  $isDirectPrint = $isLocalHost || (thermal_is_windows() && thermal_print_available());
   
-  $hasPrinterExtension = function_exists('printer_open');
+  error_log("Print Debug - HTTP_HOST: $http_host, isLocalHost: " . ($isLocalHost ? 'YES' : 'NO') . ", isDirectPrint: " . ($isDirectPrint ? 'YES' : 'NO') . ", printer_open: " . (function_exists('printer_open') ? 'YES' : 'NO') . ", shell_copy: " . (thermal_shell_available() ? 'YES' : 'NO'));
   
-  // Debug logging (bisa dihapus setelah testing)
-  error_log("Print Debug - HTTP_HOST: $http_host, SERVER_NAME: $server_name, SERVER_ADDR: $server_addr, isLocal: " . ($isLocal ? 'YES' : 'NO') . ", hasPrinterExtension: " . ($hasPrinterExtension ? 'YES' : 'NO'));
-  
-  // Jika di localhost, SELALU gunakan thermal printing langsung (dengan atau tanpa extension)
-  // Ini adalah cara yang digunakan sebelumnya untuk print langsung tanpa window
-  if ($isLocal) {
+  if ($isDirectPrint) {
     // MODE LOCAL: Gunakan thermal printing langsung via PHP (seperti sebelumnya)
     $keyword = $kd_toko.';'.$kd_pel.';'.$no_fakjual.';'.$tgl_jual.';1;'.$kd_bayar.';'.$bayar.';'.$saldohut.';'.$tgl_jt.';'.$susuk;
     $_POST['keyword'] = $keyword;
@@ -111,9 +110,12 @@
     ob_start();
     
     try {
-      // Include file thermal printing (ini yang melakukan print langsung tanpa window)
       include 'f_jualcetaknota.php';
-      $thermal_success = true;
+      if (isset($GLOBALS['thermal_last_print'])) {
+        $thermal_success = $GLOBALS['thermal_last_print']['success'];
+      } else {
+        $thermal_success = false;
+      }
     } catch (Exception $e) {
       $thermal_success = false;
       error_log("Thermal printing error: " . $e->getMessage());

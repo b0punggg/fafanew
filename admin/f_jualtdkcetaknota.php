@@ -6,29 +6,14 @@
 	$open = chr(27).chr(112).chr(48).chr(25).chr(250);
 	$Text  = $open;
 
-	// Cek apakah fungsi printer tersedia
-	if (function_exists('printer_open')) {
-		// Definisikan konstanta PRINTER_MODE jika belum ada
-		if (!defined('PRINTER_MODE')) {
-			define('PRINTER_MODE', 2); // PRINTER_MODE = 2 untuk RAW mode
-		}
-		
-		// Gunakan call_user_func untuk menghindari linter error
-		//$printer_name = "GP-80220(Cut) Series"; // Printer default yang digunakan sebelumnya
-		$printer_name = "BP-LITE 80D+80X Printer";
-		$printer = call_user_func('printer_open', $printer_name);
-		
-		if ($printer) {
-			call_user_func('printer_set_option', $printer, PRINTER_MODE, "RAW");
-			call_user_func('printer_write', $printer, $Text);    
-			call_user_func('printer_close', $printer);
-		} else {
-			// Jika printer tidak ditemukan, log error
-			error_log("Printer $printer_name tidak ditemukan atau tidak dapat dibuka");
+	include_once 'thermal_printer.php';
+	if (thermal_print_available()) {
+		$printResult = thermal_print_raw($Text, 'BP-LITE 80D+80X Printer');
+		if (!$printResult['success']) {
+			error_log("Buka laci gagal: " . $printResult['error']);
 		}
 	} else {
-		// Jika extension printer tidak tersedia, log error
-		error_log("PHP Printer extension tidak tersedia. Pastikan extension php_printer.dll sudah diaktifkan di php.ini");
+		error_log("Cetak thermal tidak tersedia. Aktifkan php_printer.dll atau shell_exec di Windows.");
 	}
 
 	// if ('$d') {
