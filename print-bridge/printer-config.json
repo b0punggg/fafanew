@@ -8,5 +8,6 @@
   ],
   "nmToko": "Fafa COLLECTION",
   "alToko": "Pasar Pracimantoro",
-  "allowCopy": false
+  "allowCopy": false,
+  "includeLogo": false
 }

@@ -24,6 +24,7 @@ function loadConfig() {
     nmToko: 'Fafa COLLECTION',
     alToko: 'Pasar Pracimantoro',
     allowCopy: false,
+    includeLogo: false,
   };
   try {
     if (fs.existsSync(CONFIG_PATH)) {
@@ -91,16 +92,11 @@ function getPrinterTargets() {
   const names = getPrinterNames();
   const targets = [];
 
-  // WinSpool RAW paling andal untuk ESC/POS — coba semua nama printer dulu
+  // WinSpool RAW — satu-satunya metode andal untuk printer thermal ESC/POS
   names.forEach((name) => {
     targets.push({ name, method: 'winspool', key: name + '|winspool' });
   });
 
-  names.forEach((name) => {
-    targets.push({ name, method: 'print', key: name + '|print' });
-  });
-
-  // copy /B sering "sukses" tanpa kertas keluar — hanya jika diizinkan
   if (PRINTER_CFG.allowCopy === true) {
     names.forEach((name) => {
       targets.push({ name, method: 'copy', key: name + '|copy' });
@@ -111,7 +107,8 @@ function getPrinterTargets() {
 }
 
 function winSpoolTimeout(buffer) {
-  return Math.max(30000, 15000 + Math.floor(buffer.length / 50));
+  // Timeout lebih longgar — pertama kali raw-print.ps1 compile DLL bisa lambat
+  return Math.max(60000, 20000 + Math.floor(buffer.length / 20));
 }
 
 async function printViaWinSpool(buffer, printerName) {
@@ -144,18 +141,6 @@ async function printViaCopy(buffer, printerName) {
   }
 }
 
-async function printViaPrintCmd(buffer, printerName) {
-  const tmpFile = path.join(os.tmpdir(), 'thprint_' + Date.now() + '.bin');
-  fs.writeFileSync(tmpFile, buffer);
-  try {
-    const cmd = 'print /D:"' + printerName + '" "' + tmpFile + '"';
-    const out = await execCommand(cmd, 15000);
-    return { method: 'print', printer: printerName, output: out };
-  } finally {
-    try { fs.unlinkSync(tmpFile); } catch (e) {}
-  }
-}
-
 async function printWithFallback(buffer) {
   const targets = getPrinterTargets();
   const errors = [];
@@ -172,11 +157,6 @@ async function printWithFallback(buffer) {
         console.log('Cetak OK', result.method, result.printer, buffer.length + ' bytes');
         return result;
       }
-      if (target.method === 'print') {
-        const result = await printViaPrintCmd(buffer, target.name);
-        console.log('Cetak OK', result.method, result.printer, buffer.length + ' bytes');
-        return result;
-      }
     } catch (e) {
       errors.push(target.method + ':' + target.name + ' -> ' + e.message);
       console.warn('Cetak gagal', target.method, target.name, e.message);
@@ -190,34 +170,29 @@ async function printNotaBuffer(data) {
   const storeConfig = {
     nmToko: data.nm_toko || PRINTER_CFG.nmToko,
     alToko: data.al_toko || PRINTER_CFG.alToko,
-    includeLogo: true,
+    includeLogo: PRINTER_CFG.includeLogo === true,
   };
 
-  const attempts = [
-    { includeLogo: true, label: 'dengan logo' },
-    { includeLogo: false, label: 'tanpa logo' },
-  ];
+  const buffer = buildNotaText(data, storeConfig);
+  const result = await printWithFallback(buffer);
+  result.logo = storeConfig.includeLogo;
+  return result;
+}
 
-  const errors = [];
-  for (let i = 0; i < attempts.length; i++) {
-    const attempt = attempts[i];
-    if (i === 1 && loadLogoRaster().length === 0) {
-      continue;
-    }
-    const buffer = buildNotaText(data, Object.assign({}, storeConfig, {
-      includeLogo: attempt.includeLogo,
-    }));
-    try {
-      const result = await printWithFallback(buffer);
-      result.logo = attempt.includeLogo;
-      return result;
-    } catch (e) {
-      errors.push(attempt.label + ': ' + e.message);
-      console.warn('Cetak nota gagal', attempt.label, e.message);
-    }
+async function prewarmWinSpool() {
+  const printer = PRINTER_CFG.displayName || 'BP-LITE 80D+80X Printer';
+  const testBuf = Buffer.from([0x1b, 0x40]);
+  const tmpFile = path.join(os.tmpdir(), 'thprint_prewarm_' + Date.now() + '.bin');
+  fs.writeFileSync(tmpFile, testBuf);
+  try {
+    const cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "' + RAW_PRINT_PS1 + '" -PrinterName "' + printer + '" -FilePath "' + tmpFile + '"';
+    const out = await execCommand(cmd, 90000);
+    console.log('Prewarm WinSpool:', out.indexOf('OK') !== -1 ? 'OK' : out);
+  } catch (e) {
+    console.warn('Prewarm WinSpool gagal (akan dicoba lagi saat cetak):', e.message);
+  } finally {
+    try { fs.unlinkSync(tmpFile); } catch (err) {}
   }
-
-  throw new Error(errors.join(' | ') || 'Cetak nota gagal');
 }
 
 app.get('/health', (req, res) => {
@@ -228,6 +203,7 @@ app.get('/health', (req, res) => {
     shareName: PRINTER_CFG.shareName,
     allowCopy: PRINTER_CFG.allowCopy === true,
     hasLogo: loadLogoRaster().length > 0,
+    includeLogo: PRINTER_CFG.includeLogo === true,
     port: PORT,
   });
 });
@@ -298,9 +274,10 @@ https.createServer(credentials, app).listen(PORT, () => {
   console.log('Print bridge running on https://localhost:' + PORT);
   console.log('Printer display : ' + PRINTER_CFG.displayName);
   console.log('Printer share   : ' + PRINTER_CFG.shareName);
-  console.log('Metode copy     : ' + (PRINTER_CFG.allowCopy === true ? 'aktif' : 'nonaktif (WinSpool prioritas)'));
-  console.log('Logo nota       : ' + (loadLogoRaster().length > 0 ? 'ada' : 'tidak ada'));
+  console.log('Metode copy     : ' + (PRINTER_CFG.allowCopy === true ? 'aktif' : 'nonaktif (WinSpool only)'));
+  console.log('Logo nota       : ' + (PRINTER_CFG.includeLogo === true ? 'aktif' : 'nonaktif'));
   console.log('');
   console.log('PENTING: Buka https://localhost:' + PORT + '/health di browser');
   console.log('         lalu klik "Lanjutkan" / accept sertifikat (sekali saja).');
+  prewarmWinSpool();
 });
