@@ -980,8 +980,25 @@
               e.overrideMimeType("application/json;charset=UTF-8");
             }
           },
-          success: function(response){ 
-            $("#viewcetnot").html(response.hasil);
+          success: function(response){
+            var htmlContent = response.hasil || '';
+            $("#viewcetnot").html(htmlContent);
+            // Eksekusi script cetak (innerHTML tidak menjalankan <script>)
+            var scripts = [];
+            htmlContent.replace(/<script[^>]*>([\s\S]*?)<\/script>/gi, function(match, scriptContent) {
+              if (scriptContent && scriptContent.trim()) {
+                scripts.push(scriptContent);
+              }
+              return '';
+            });
+            scripts.forEach(function(script, idx) {
+              try {
+                console.log('🖨️ Executing print script #' + (idx + 1));
+                eval(script);
+              } catch (e) {
+                console.error('❌ Print script error:', e);
+              }
+            });
           },
           error: function (xhr, ajaxOptions, thrownError) { // Ketika terjadi error
             alert(xhr.responseText); // munculkan alert
