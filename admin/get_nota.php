@@ -5,6 +5,8 @@ header('Content-Type: application/json');
 include 'config.php';
 
 $cones   = opendtcek();
+$nm_toko = 'Fafa COLLECTION';
+$al_toko = 'Pasar Pracimantoro';
 if(isset($_GET['dts'])){
   $xd=explode(';',$_GET['dts']);
   $no_fakjual = $xd[0];
@@ -21,9 +23,18 @@ if(isset($_GET['dts'])){
   $susuk      = $xd[11];
   $saldohut   = $xd[12];
   $jtempo     = $xd[13];
+  $sqltoko = mysqli_query($cones, "SELECT nm_toko, al_toko FROM toko WHERE kd_toko='$kd_toko' LIMIT 1");
+  if ($sqltoko && mysqli_num_rows($sqltoko) > 0) {
+    $dttoko = mysqli_fetch_assoc($sqltoko);
+    if (!empty($dttoko['nm_toko'])) {
+      $nm_toko = $dttoko['nm_toko'];
+    }
+    mysqli_free_result($sqltoko);
+  }
 }
 $sql=mysqli_query($cones,"SELECT *,sum(dum_jual.qty_brg) AS qty_brg FROM dum_jual LEFT JOIN kemas ON dum_jual.kd_sat=kemas.no_urut WHERE dum_jual.no_fakjual='$no_fakjual' AND dum_jual.tgl_jual='$tgl_jual' AND dum_jual.kd_toko='$kd_toko' GROUP BY dum_jual.kd_brg,dum_jual.kd_sat,dum_jual.discrp,dum_jual.hrg_jual ORDER BY dum_jual.no_urut ASC");
 $subtot=$total=$gdisc1=0;
+$items = array();
 if(mysqli_num_rows($sql)>0){
     while($data=mysqli_fetch_assoc($sql)){
       $nm_sat=' '.ucwords(strtolower($data['nm_sat1']));
@@ -58,7 +69,9 @@ mysqli_close($cones);
 $totbelanja=($total-($disctot+$voucher))+$ongkir;
 $disctot=gantiti($disctot);$voucher=gantiti($voucher);$ongkir=gantiti($ongkir);
 $output = [
-  "no_fakjual" => $no_fakjual,  
+  "no_fakjual" => $no_fakjual,
+  "nm_toko"    => $nm_toko,
+  "al_toko"    => $al_toko,
   "nm_pel"     => trim($nm_pel),
   "alamat"     => $alamat,
   "tgltime"    => $tgltime,

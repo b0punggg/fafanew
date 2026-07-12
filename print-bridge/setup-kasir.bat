@@ -46,8 +46,27 @@ if errorlevel 1 (
 echo [OK] Sertifikat SSL siap.
 echo.
 
+:: Buat logo raster untuk nota (butuh PHP + GD, opsional)
+echo [3/6] Membuat logo nota...
+where php >nul 2>&1
+if errorlevel 1 (
+    if exist assets\logo-raster.bin (
+        echo [OK] Logo sudah ada di assets\logo-raster.bin
+    ) else (
+        echo [PERINGATAN] PHP tidak ditemukan. Salin assets\logo-raster.bin dari repo.
+    )
+) else (
+    php generate-logo.php
+    if errorlevel 1 (
+        echo [PERINGATAN] generate-logo.php gagal. Cek file logo di assets\ atau admin\img\
+    ) else (
+        echo [OK] Logo nota siap.
+    )
+)
+echo.
+
 :: Hapus task lama jika ada
-echo [3/5] Mendaftarkan auto-start Windows...
+echo [4/6] Mendaftarkan auto-start Windows...
 set TASK_NAME=TokofafaPrintBridge
 set VBS_PATH=%~dp0start-hidden.vbs
 
@@ -71,13 +90,13 @@ if errorlevel 1 (
 echo.
 
 :: Jalankan sekarang
-echo [4/5] Menjalankan print-bridge sekarang...
+echo [5/6] Menjalankan print-bridge sekarang...
 start "" wscript.exe "%VBS_PATH%"
 timeout /t 3 /nobreak >nul
 echo.
 
 :: Test kesehatan
-echo [5/5] Mengecek status print-bridge...
+echo [6/6] Mengecek status print-bridge...
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0http-helper.ps1" -Url "https://localhost:3000/health" -TimeoutSec 8
 echo.
 
