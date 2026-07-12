@@ -11,6 +11,7 @@
   ini_set('display_errors', 0);
 
 include_once 'config.php';
+include_once 'print_bridge_config.php';
 date_default_timezone_set('Asia/Jakarta');
 session_start();
 $kd_toko      = $_SESSION['id_toko'];
@@ -938,7 +939,7 @@ if ($d && $pil_cetak =="CETAK-SM"){
     .then(res => res.json())
     .then(data => {
       console.log("✅ Parsed JSON:", data);
-      fetch("http://localhost:3000/print/nota", {
+      fetch("<?= PRINT_BRIDGE_URL ?>/print/nota", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data.data)
@@ -964,7 +965,7 @@ if ($d && $pil_cetak =="CETAK-SM"){
         fetch("get_nota.php?dts=<?=addslashes($dtc)?>")
         .then(res => res.json())
         .then(data => {
-          fetch("http://localhost:8080/print/nota", {
+          fetch("<?= PRINT_BRIDGE_URL_ALT ?>/print/nota", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(data.data)

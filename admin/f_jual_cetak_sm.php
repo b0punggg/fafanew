@@ -294,7 +294,7 @@ th, td {
         var htmlContent = document.documentElement.outerHTML;
         
         // Metode 1: Kirim HTML content langsung ke print server (port 3000)
-        fetch("http://localhost:3000/print/html", {
+        fetch("https://localhost:3000/print/html", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -324,7 +324,7 @@ th, td {
         })
         .catch(function(error) {
           // Metode 2: Coba print server alternatif dengan HTML content
-          return fetch("http://localhost:8080/print/html", {
+          return fetch("https://localhost:8080/print/html", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({

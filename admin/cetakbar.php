@@ -7,7 +7,7 @@
 </head>
 <body>
   <script>
-    fetch("http://localhost:3000/print/qr-grid", {
+    fetch("https://localhost:3000/print/qr-grid", {
   method: "POST",
   headers: { "Content-Type": "application/json" },
   body: JSON.stringify({

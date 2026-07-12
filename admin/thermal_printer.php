@@ -34,12 +34,49 @@ if (!function_exists('thermal_default_printers')) {
     function thermal_default_printers() {
         return array(
             'BP-LITE 80D+80X Printer',
+            'BP-LITE80D',
             'BP-LITE 80D+80X',
             'GP-80250N Series',
             'POS-80C',
             'GP-80220(Cut) Series',
             'ZJ-80',
         );
+    }
+}
+
+if (!function_exists('thermal_copy_success')) {
+    function thermal_copy_success($output) {
+        if ($output === null || $output === '') {
+            return false;
+        }
+        $o = strtolower($output);
+        if (strpos($o, '0 file(s) copied') !== false || strpos($o, '0 file copied') !== false) {
+            return false;
+        }
+        return (strpos($o, '1 file(s) copied') !== false)
+            || (strpos($o, '1 file copied') !== false)
+            || (strpos($o, '1 berkas') !== false);
+    }
+}
+
+if (!function_exists('thermal_print_winspool')) {
+    function thermal_print_winspool($printerName, $text) {
+        if (!thermal_shell_available()) {
+            return false;
+        }
+        $ps1 = dirname(__FILE__) . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . 'print-bridge' . DIRECTORY_SEPARATOR . 'raw-print.ps1';
+        if (!file_exists($ps1)) {
+            return false;
+        }
+        $tmpFile = tempnam(sys_get_temp_dir(), 'thprint_');
+        if ($tmpFile === false) {
+            return false;
+        }
+        file_put_contents($tmpFile, $text);
+        $cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "' . $ps1 . '" -PrinterName "' . str_replace('"', '""', $printerName) . '" -FilePath "' . str_replace('"', '""', $tmpFile) . '"';
+        $output = shell_exec($cmd);
+        @unlink($tmpFile);
+        return $output !== null && stripos($output, 'OK') !== false;
     }
 }
 
@@ -132,7 +169,19 @@ if (!function_exists('thermal_print_windows_copy')) {
             return false;
         }
 
-        return (stripos($output, 'copied') !== false) || (stripos($output, 'disalin') !== false);
+        return thermal_copy_success($output);
+    }
+}
+
+if (!function_exists('thermal_print_to')) {
+    function thermal_print_to($printerName, $text) {
+        if (thermal_print_extension($printerName, $text)) {
+            return true;
+        }
+        if (thermal_print_winspool($printerName, $text)) {
+            return true;
+        }
+        return thermal_print_windows_copy($printerName, $text);
     }
 }
 
@@ -161,15 +210,6 @@ if (!function_exists('thermal_print_extension')) {
             error_log('thermal_print_extension error: ' . $e->getMessage());
             return false;
         }
-    }
-}
-
-if (!function_exists('thermal_print_to')) {
-    function thermal_print_to($printerName, $text) {
-        if (thermal_print_extension($printerName, $text)) {
-            return true;
-        }
-        return thermal_print_windows_copy($printerName, $text);
     }
 }
 

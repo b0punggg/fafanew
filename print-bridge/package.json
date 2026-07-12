@@ -4,10 +4,12 @@
   "description": "Print bridge lokal untuk printer thermal Windows",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "cert": "node generate-cert.js"
   },
   "dependencies": {
     "cors": "^2.8.5",
-    "express": "^4.18.2"
+    "express": "^4.18.2",
+    "selfsigned": "^2.4.1"
   }
 }
