@@ -1,19 +1,21 @@
 /**
  * Print Bridge - layanan cetak lokal di PC kasir (Windows).
- * Jalankan: npm install && npm start
+ * HTTPS agar browser HTTPS (Hostinger) boleh fetch ke localhost.
  */
 const express = require('express');
+const https = require('https');
 const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const https = require('https');
 const { exec } = require('child_process');
 const { ensureSslCerts } = require('./generate-cert');
+const { buildNotaText } = require('./nota-layout');
 
 const PORT = process.env.PORT || 3000;
 const CONFIG_PATH = path.join(__dirname, 'printer-config.json');
 const RAW_PRINT_PS1 = path.join(__dirname, 'raw-print.ps1');
+const EXEC_TIMEOUT_MS = 20000;
 
 function loadConfig() {
   const defaults = {
@@ -40,25 +42,24 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.text({ limit: '10mb', type: 'text/plain' }));
 
 function execCommand(cmd, timeoutMs) {
-  const timeout = timeoutMs || 20000;
+  const limit = timeoutMs || EXEC_TIMEOUT_MS;
   return new Promise((resolve, reject) => {
-    const child = exec(cmd, { windowsHide: true, maxBuffer: 1024 * 1024 }, (err, stdout, stderr) => {
-      clearTimeout(timer);
-      const out = ((stdout || '') + (stderr || '')).trim();
-      if (err) {
-        const error = new Error(out || err.message);
-        error.output = out;
-        return reject(error);
+    const child = exec(
+      cmd,
+      { windowsHide: true, maxBuffer: 1024 * 1024, timeout: limit },
+      (err, stdout, stderr) => {
+        const out = ((stdout || '') + (stderr || '')).trim();
+        if (err) {
+          const msg = out || err.message || 'Perintah gagal';
+          const error = new Error(msg);
+          error.output = out;
+          error.killed = err.killed;
+          return reject(error);
+        }
+        resolve(out);
       }
-      resolve(out);
-    });
-
-    const timer = setTimeout(() => {
-      try {
-        child.kill();
-      } catch (e) {}
-      reject(new Error('Timeout setelah ' + timeout + 'ms'));
-    }, timeout);
+    );
+    child.on('error', reject);
   });
 }
 
@@ -70,149 +71,6 @@ function isCopySuccess(output) {
   return /1 file\(s\) copied/.test(o) || /1 file copied/.test(o) || /1 berkas/.test(o);
 }
 
-// Port fungsi PHP: spasistr / spasinum (padding kiri)
-function spasi(str, len) {
-  str = String(str ?? '');
-  if (str.length >= len) return str.substring(0, len);
-  return ' '.repeat(len - str.length) + str;
-}
-
-function spasicenter(str, width) {
-  str = String(str ?? '');
-  if (str.length >= width) return str.substring(0, width);
-  const left = Math.floor((width - str.length) / 2);
-  return ' '.repeat(left) + str + ' '.repeat(width - str.length - left);
-}
-
-// Port fungsi PHP: gantiti (format angka ribuan dengan titik)
-function gantiti(b) {
-  let minus = false;
-  let num = Math.round(Number(b) || 0);
-  if (num < 0) {
-    minus = true;
-    num = -num;
-  }
-  const s = String(num);
-  let c = '';
-  let j = 0;
-  for (let i = s.length; i > 0; i--) {
-    j += 1;
-    if (j % 3 === 1 && j !== 1) {
-      c = s.charAt(i - 1) + '.' + c;
-    } else {
-      c = s.charAt(i - 1) + c;
-    }
-  }
-  return (minus ? '-' : '') + c;
-}
-
-function fmtAmount(val) {
-  if (val === null || val === undefined || val === '') {
-    return gantiti(0);
-  }
-  if (typeof val === 'string' && /^-?\d{1,3}(\.\d{3})*$/.test(val)) {
-    return val;
-  }
-  return gantiti(val);
-}
-
-function amountPositive(val) {
-  const raw = String(val ?? '').replace(/\./g, '');
-  const n = Number(raw);
-  return !isNaN(n) && n > 0;
-}
-
-function buildNotaText(data) {
-  const cutPaper = Buffer.from([0x1d, 0x56, 0x30, 0x00]);
-  const openDrawer = Buffer.from([0x1b, 0x70, 0x30, 0x19, 0xfa]);
-  const def = 1;
-  const p = () => spasi('', def);
-  const lines = [];
-
-  const nmToko = data.nm_toko || 'TOKOFAFA';
-  const alToko = data.al_toko || '';
-
-  lines.push(p() + spasicenter(nmToko, 47));
-  if (alToko) {
-    lines.push(spasicenter(alToko, 47 + def));
-  }
-  lines.push('');
-
-  lines.push(p() + 'No.Struk ' + spasi('', 5) + ':' + spasi(data.no_fakjual || '', 20));
-  lines.push(p() + 'Tanggal  ' + spasi('', 5) + ':' + spasi(data.tgltime || '', 20));
-
-  if (data.nm_member) {
-    lines.push(p() + 'Member   ' + spasi('', 5) + ':' + spasi(data.nm_member, 30));
-    if (amountPositive(data.poin_earned)) {
-      lines.push(p() + 'Poin Dapat' + spasi('', 3) + ':' + spasi(fmtAmount(data.poin_earned) + ' Poin', 30));
-    }
-    if (data.poin_saldo !== undefined && data.poin_saldo !== null) {
-      lines.push(p() + 'Poin Saldo' + spasi('', 3) + ':' + spasi(fmtAmount(data.poin_saldo) + ' Poin', 30));
-    }
-  }
-
-  lines.push(p() + '-----------------------------------------------');
-  lines.push(p() + 'No.' + spasi('', 5) + 'Nama Barang');
-  lines.push(
-    p() +
-    spasi('', 5) +
-    spasi('Jml', 10) +
-    spasi('Disc%', 12) +
-    spasi('Harga', 11) +
-    spasi('SubTotal', 12)
-  );
-  lines.push(p() + '-----------------------------------------------');
-
-  (data.items || []).forEach((item, idx) => {
-    const no = idx + 1;
-    lines.push(p() + spasi(no, 3) + '.' + spasi('', 1) + (item.nmbrg || ''));
-    lines.push(
-      spasi('', 4 + def) +
-      spasi(item.qty || 0, 3) +
-      spasi(item.sat || '', 5) +
-      spasi(item.disc || 0, 9) +
-      spasi('', 2) +
-      spasi(fmtAmount(item.hrg), 9) +
-      spasi('', 2) +
-      spasi(fmtAmount(item.subtot), 12)
-    );
-  });
-
-  lines.push(p() + '-----------------------------------------------');
-
-  function moneyLine(label, amount) {
-    return spasi('', 7 + def) + spasi(label, 15) + spasi('', 4) + 'Rp. ' + spasi(fmtAmount(amount), 16);
-  }
-
-  lines.push(moneyLine('Total', data.belanja || 0));
-
-  if (amountPositive(data.disctot)) {
-    lines.push(moneyLine('Disc Nota', data.disctot));
-  }
-  if (amountPositive(data.ongkir)) {
-    lines.push(moneyLine('Ongkir', data.ongkir));
-  }
-
-  const kdBayar = String(data.kd_bayar || 'TUNAI').toUpperCase();
-  if (kdBayar === 'TUNAI') {
-    lines.push(moneyLine('Uang Tunai', data.bayar || 0));
-    lines.push(moneyLine('Kembali', data.susuk || 0));
-  } else {
-    lines.push(moneyLine('Uang Tunai', data.bayar || 0));
-    lines.push(moneyLine('Kekurangan', data.saldohut || 0));
-    lines.push(spasi('', 7 + def) + spasi('Jatuh Tempo', 15) + spasi('', 4) + 'Rp. ' + spasi(data.jtempo || '', 16));
-  }
-
-  lines.push('');
-  lines.push(spasicenter('BARANG YG.SUDAH DIBELI TDK BISA DIKEMBALIKAN', 46 + def));
-  lines.push(spasicenter('*TERIMA KASIH*', 47 + def));
-  lines.push('');
-  lines.push('');
-
-  const text = openDrawer.toString('binary') + lines.join('\n') + '\n\n\n\n\n\n';
-  return Buffer.concat([Buffer.from(text, 'binary'), cutPaper]);
-}
-
 function getPrinterTargets() {
   const targets = [];
   function add(name, method) {
@@ -222,17 +80,12 @@ function getPrinterTargets() {
       targets.push({ name, method, key });
     }
   }
-
-  // Share copy dulu (cepat), lalu WinSpool display name, sisanya fallback
-  add(PRINTER_CFG.shareName, 'copy');
   add(PRINTER_CFG.displayName, 'winspool');
+  add(PRINTER_CFG.shareName, 'copy');
   add(PRINTER_CFG.displayName, 'print');
   (PRINTER_CFG.altNames || []).forEach((n) => {
-    if (n !== PRINTER_CFG.shareName && n !== PRINTER_CFG.displayName) {
-      add(n, 'copy');
-      add(n, 'winspool');
-      add(n, 'print');
-    }
+    add(n, 'winspool');
+    add(n, 'copy');
   });
   return targets;
 }
@@ -241,8 +94,15 @@ async function printViaWinSpool(buffer, printerName) {
   const tmpFile = path.join(os.tmpdir(), 'thprint_' + Date.now() + '.bin');
   fs.writeFileSync(tmpFile, buffer);
   try {
-    const cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "' + RAW_PRINT_PS1 + '" -PrinterName "' + printerName + '" -FilePath "' + tmpFile + '"';
-    const out = await execCommand(cmd, 10000);
+    const cmd =
+      'powershell -NoProfile -ExecutionPolicy Bypass -File "' +
+      RAW_PRINT_PS1 +
+      '" -PrinterName "' +
+      printerName +
+      '" -FilePath "' +
+      tmpFile +
+      '"';
+    const out = await execCommand(cmd, 15000);
     if (out.indexOf('OK') !== -1) {
       return { method: 'winspool', printer: printerName, output: out };
     }
@@ -257,7 +117,7 @@ async function printViaCopy(buffer, printerName) {
   fs.writeFileSync(tmpFile, buffer);
   try {
     const cmd = 'copy /B "' + tmpFile + '" "\\\\localhost\\' + printerName + '"';
-    const out = await execCommand(cmd, 5000);
+    const out = await execCommand(cmd, 10000);
     if (!isCopySuccess(out)) {
       throw new Error(out || 'Copy gagal');
     }
@@ -306,7 +166,7 @@ async function printWithFallback(buffer) {
 app.get('/health', (req, res) => {
   res.json({
     ok: true,
-    protocol: 'https',
+    https: true,
     displayName: PRINTER_CFG.displayName,
     shareName: PRINTER_CFG.shareName,
     port: PORT,
@@ -315,7 +175,13 @@ app.get('/health', (req, res) => {
 
 app.post('/print/test', async (req, res) => {
   try {
-    const buffer = Buffer.from([0x1b, 0x40, 0x54, 0x45, 0x53, 0x54, 0x20, 0x50, 0x52, 0x49, 0x4e, 0x54, 0x0a, 0x0a, 0x0a, 0x1d, 0x56, 0x00]);
+    const buffer = Buffer.from([
+      0x1b, 0x40,
+      0x1b, 0x61, 0x01,
+      0x54, 0x45, 0x53, 0x54, 0x20, 0x50, 0x52, 0x49, 0x4e, 0x54, 0x0a,
+      0x54, 0x4f, 0x4b, 0x4f, 0x46, 0x41, 0x46, 0x41, 0x0a, 0x0a, 0x0a,
+      0x1d, 0x56, 0x30, 0x00,
+    ]);
     const result = await printWithFallback(buffer);
     res.json({ success: true, ...result });
   } catch (e) {
@@ -367,16 +233,16 @@ app.post('/print/html', async (req, res) => {
 });
 
 const { certPath, keyPath } = ensureSslCerts();
-const credentials = {
+const sslOptions = {
   cert: fs.readFileSync(certPath),
   key: fs.readFileSync(keyPath),
 };
 
-https.createServer(credentials, app).listen(PORT, () => {
+https.createServer(sslOptions, app).listen(PORT, () => {
   console.log('Print bridge running on https://localhost:' + PORT);
   console.log('Printer display : ' + PRINTER_CFG.displayName);
   console.log('Printer share   : ' + PRINTER_CFG.shareName);
   console.log('');
-  console.log('PENTING: Buka https://localhost:' + PORT + '/health di browser');
-  console.log('         lalu klik "Lanjutkan" / accept sertifikat (sekali saja).');
+  console.log('PENTING: Buka https://localhost:' + PORT + '/health di browser kasir');
+  console.log('         dan terima sertifikat (sekali saja) agar cetak dari web berjalan.');
 });

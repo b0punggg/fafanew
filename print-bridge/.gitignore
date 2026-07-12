@@ -1,5 +1,4 @@
 node_modules/
 logs/
 tools/nssm.exe
-ssl/
-RawPrinterHelper.dll
+ssl/*.pem

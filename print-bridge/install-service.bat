@@ -49,6 +49,7 @@ if not exist "%NSSM_EXE%" (
 
 echo [1/5] Menginstall dependency...
 call npm install
+node generate-cert.js >nul 2>&1
 echo.
 
 echo [2/5] Menghentikan service lama jika ada...

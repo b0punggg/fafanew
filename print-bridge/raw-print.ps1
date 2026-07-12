@@ -9,8 +9,6 @@ if (-not (Test-Path -LiteralPath $FilePath)) {
 }
 
 $bytes = [System.IO.File]::ReadAllBytes($FilePath)
-$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$dllPath = Join-Path $scriptDir 'RawPrinterHelper.dll'
 
 $source = @"
 using System;
@@ -58,10 +56,7 @@ public class RawPrinterHelper {
 "@
 
 try {
-    if (-not (Test-Path -LiteralPath $dllPath)) {
-        Add-Type -TypeDefinition $source -Language CSharp -OutputAssembly $dllPath -OutputType Library
-    }
-    Add-Type -Path $dllPath
+    Add-Type -TypeDefinition $source -Language CSharp -ErrorAction Stop
     $ok = [RawPrinterHelper]::SendBytesToPrinter($PrinterName, $bytes)
     if ($ok) {
         Write-Output "OK"

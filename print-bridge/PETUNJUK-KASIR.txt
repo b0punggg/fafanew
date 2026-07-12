@@ -3,19 +3,20 @@
 ================================================================================
 
 Print bridge diperlukan agar nota bisa cetak ke printer thermal dari
-aplikasi web (Hostinger) ke printer lokal di PC kasir.
+aplikasi web (Hostinger HTTPS) ke printer lokal di PC kasir.
 
 --------------------------------------------------------------------------------
 SYARAT (install sekali di PC kasir)
 --------------------------------------------------------------------------------
 1. Windows 7 atau lebih baru
-2. Node.js LTS  -> download: https://nodejs.org
+2. Node.js       -> Windows 7: v12.22.12 | Windows 10+: LTS dari nodejs.org
 3. Printer thermal sudah terinstall di Windows
    Nama printer: BP-LITE 80D+80X Printer
+   Share name  : BP-LITE80D
 4. Folder print-bridge sudah ada di PC kasir
 
 --------------------------------------------------------------------------------
-CARA SETUP (sekali saja, ~2 menit)
+CARA SETUP (sekali saja, ~3 menit)
 --------------------------------------------------------------------------------
 1. Copy folder "print-bridge" ke PC kasir, contoh:
    C:\tokofafa\print-bridge
@@ -24,15 +25,11 @@ CARA SETUP (sekali saja, ~2 menit)
 
 3. Tunggu sampai muncul "SETUP SELESAI"
 
-4. PENTING - accept sertifikat HTTPS (sekali saja):
-   Buka browser Chrome/Edge di PC kasir:
+4. Jika cetak dari web masih gagal, buka sekali di browser kasir:
    https://localhost:3000/health
-   Klik "Lanjutkan ke localhost (tidak aman)" / "Advanced" -> "Proceed"
-   Ini wajib agar cetak dari https://tokofafa.dhe51.id tidak diblokir browser.
+   Klik "Advanced" -> "Proceed to localhost (unsafe)"
 
-5. Selesai! Print bridge akan jalan OTOMATIS setiap:
-   - PC dinyalakan
-   - Kasir login Windows
+5. Selesai! Print bridge jalan OTOMATIS setiap login Windows.
 
 --------------------------------------------------------------------------------
 KASIR TIDAK PERLU:
@@ -47,33 +44,33 @@ CEK APAKAH SUDAH JALAN
 Double-click: cek-printer.bat
 Atau buka browser: https://localhost:3000/health
 
-Harus muncul: {"ok":true,"protocol":"https","displayName":"BP-LITE 80D+80X Printer",...}
+Harus muncul: {"ok":true,"https":true,"displayName":"BP-LITE 80D+80X Printer",...}
 
 --------------------------------------------------------------------------------
 JIKA CETAK GAGAL
 --------------------------------------------------------------------------------
 1. Jalankan cek-printer.bat
-2. Pastikan printer menyala dan kertas ada
-3. Buka https://localhost:3000/health dan accept sertifikat jika diminta
+2. Jalankan terima-sertifikat.bat (jika browser blokir HTTPS)
+3. Pastikan printer menyala dan kertas ada
 4. Restart PC kasir
 5. Jika masih gagal, jalankan ulang setup-kasir.bat
 
 --------------------------------------------------------------------------------
 SETUP LANJUTAN (opsional, untuk IT/developer)
 --------------------------------------------------------------------------------
-install-service.bat  -> jalan sebagai Windows Service (permanen)
-                      perlu nssm.exe di folder tools\
-                      jalankan sebagai Administrator
-
-uninstall-kasir.bat  -> hapus auto-start Task Scheduler
+install-service.bat    -> jalan sebagai Windows Service (permanen)
+terima-sertifikat.bat  -> impor sertifikat SSL ke Windows
+uninstall-kasir.bat    -> hapus auto-start Task Scheduler
 
 --------------------------------------------------------------------------------
 FILE PENTING
 --------------------------------------------------------------------------------
-setup-kasir.bat      -> SETUP UTAMA (jalankan ini)
-cek-printer.bat      -> cek status print bridge
-start-hidden.vbs     -> jalan di background (otomatis)
-server.js            -> program print bridge (HTTPS)
-PETUNJUK-KASIR.txt   -> file ini
+setup-kasir.bat        -> SETUP UTAMA (jalankan ini)
+cek-printer.bat        -> cek status + test cetak
+terima-sertifikat.bat  -> terima sertifikat HTTPS (sekali)
+start-hidden.vbs       -> jalan di background (otomatis)
+server.js              -> program print bridge (HTTPS)
+nota-layout.js         -> format struk thermal
+PETUNJUK-KASIR.txt     -> file ini
 
 ================================================================================

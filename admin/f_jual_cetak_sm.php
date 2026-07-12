@@ -324,7 +324,7 @@ th, td {
         })
         .catch(function(error) {
           // Metode 2: Coba print server alternatif dengan HTML content
-          return fetch("https://localhost:8080/print/html", {
+          return fetch("http://localhost:8080/print/html", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({

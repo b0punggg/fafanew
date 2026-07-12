@@ -13,8 +13,8 @@ where node >nul 2>&1
 if errorlevel 1 (
     echo [ERROR] Node.js belum terinstall!
     echo.
-    echo Download dan install Node.js LTS dari: https://nodejs.org
-    echo Setelah install, jalankan ulang file ini.
+    echo Download dan install Node.js v12 untuk Windows 7
+    echo atau LTS terbaru untuk Windows 10+
     echo.
     pause
     exit /b 1
@@ -35,19 +35,29 @@ if errorlevel 1 (
 echo [OK] Dependency terinstall.
 echo.
 
-:: Buat sertifikat SSL untuk HTTPS
-echo [2/5] Membuat sertifikat SSL (HTTPS)...
-call node generate-cert.js
+:: Buat sertifikat SSL
+echo [2/5] Membuat sertifikat HTTPS...
+node generate-cert.js
 if errorlevel 1 (
-    echo [ERROR] Gagal buat sertifikat SSL.
+    echo [ERROR] Gagal membuat sertifikat SSL.
     pause
     exit /b 1
 )
 echo [OK] Sertifikat SSL siap.
 echo.
 
+:: Terima sertifikat di Windows (agar browser tidak blokir)
+echo [3/5] Mendaftarkan sertifikat ke Windows...
+certutil -addstore -user Root "%~dp0ssl\cert.pem" >nul 2>&1
+if errorlevel 1 (
+    echo [PERINGATAN] certutil gagal. Jalankan terima-sertifikat.bat manual.
+) else (
+    echo [OK] Sertifikat dipercaya Windows.
+)
+echo.
+
 :: Hapus task lama jika ada
-echo [3/5] Mendaftarkan auto-start Windows...
+echo [4/5] Mendaftarkan auto-start Windows...
 set TASK_NAME=TokofafaPrintBridge
 set VBS_PATH=%~dp0start-hidden.vbs
 
@@ -66,18 +76,16 @@ if errorlevel 1 (
     echo [OK] Shortcut dibuat di folder Startup.
 ) else (
     echo [OK] Task Scheduler "%TASK_NAME%" berhasil dibuat.
-    echo      Print bridge akan jalan otomatis setiap login Windows.
 )
 echo.
 
 :: Jalankan sekarang
-echo [4/5] Menjalankan print-bridge sekarang...
+echo [5/5] Menjalankan print-bridge...
 start "" wscript.exe "%VBS_PATH%"
-timeout /t 3 /nobreak >nul
+timeout /t 4 /nobreak >nul
 echo.
 
-:: Test kesehatan
-echo [5/5] Mengecek status print-bridge...
+echo Mengecek status print-bridge...
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0http-helper.ps1" -Url "https://localhost:3000/health" -TimeoutSec 8
 echo.
 
@@ -88,15 +96,11 @@ echo.
 echo Printer default : BP-LITE 80D+80X Printer
 echo Cek status      : https://localhost:3000/health
 echo.
-echo PENTING (sekali saja):
-echo Buka https://localhost:3000/health di browser Chrome/Edge,
-echo lalu klik "Lanjutkan" / accept sertifikat agar cetak dari
-echo https://tokofafa.dhe51.id tidak diblokir Mixed Content.
+echo PENTING (sekali saja jika cetak masih gagal):
+echo   Buka https://localhost:3000/health di browser kasir
+echo   Klik Advanced -^> Proceed to localhost
 echo.
 echo Kasir TIDAK perlu klik start.bat lagi.
 echo Print bridge jalan otomatis setiap login Windows.
-echo.
-echo Untuk service permanen (opsional), jalankan
-echo install-service.bat sebagai Administrator.
 echo.
 pause

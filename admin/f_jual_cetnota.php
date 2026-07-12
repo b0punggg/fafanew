@@ -1,6 +1,5 @@
 <?php
   include_once 'config.php';
-  include_once 'print_bridge_config.php';
   session_start();
   
   $cDtc  = $_POST['dtc'];
@@ -172,7 +171,7 @@ fetch("get_nota.php?dts=' . addslashes($dtc) . '")
 .then(res => res.json())
 .then(data => {
   console.log("✅ Parsed JSON:", data);
-  fetch("<?= PRINT_BRIDGE_URL ?>/print/nota", {
+  fetch("https://localhost:3000/print/nota", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data.data)
@@ -198,7 +197,7 @@ fetch("get_nota.php?dts=' . addslashes($dtc) . '")
     fetch("get_nota.php?dts=' . addslashes($dtc) . '")
     .then(res => res.json())
     .then(data => {
-      fetch("<?= PRINT_BRIDGE_URL_ALT ?>/print/nota", {
+      fetch("http://localhost:8080/print/nota", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data.data)
