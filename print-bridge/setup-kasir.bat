@@ -86,7 +86,7 @@ timeout /t 4 /nobreak >nul
 echo.
 
 echo Mengecek status print-bridge...
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0http-helper.ps1" -Url "https://localhost:3000/health" -TimeoutSec 8
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0http-helper.ps1" -Url "http://localhost:3000/health" -TimeoutSec 8
 echo.
 
 echo ============================================
@@ -94,11 +94,10 @@ echo   SETUP SELESAI
 echo ============================================
 echo.
 echo Printer default : BP-LITE 80D+80X Printer
-echo Cek status      : https://localhost:3000/health
+echo Cek status      : http://localhost:3000/health
 echo.
 echo PENTING (sekali saja jika cetak masih gagal):
-echo   Buka https://localhost:3000/health di browser kasir
-echo   Klik Advanced -^> Proceed to localhost
+echo   Buka http://localhost:3000/health di browser kasir
 echo.
 echo Kasir TIDAK perlu klik start.bat lagi.
 echo Print bridge jalan otomatis setiap login Windows.

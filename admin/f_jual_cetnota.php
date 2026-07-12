@@ -150,71 +150,26 @@
     
     // Gunakan metode script lama yang terbukti bekerja - kirim JSON data langsung ke print server
     $script_content = '<script>
-async function fetchJSON(url, options = {}) {
-  try {
-    const res = await fetch(url, options);
-    try {
-      return await res.json();
-    } catch (jsonErr) {
-      const raw = await res.text();
-      console.error("❌ JSON Parse Error:", jsonErr.message);
-      console.log("📜 RAW RESPONSE:\n", raw);
-      throw jsonErr;
-    }
-  } catch (err) {
-    console.error("❌ Fetch Error:", err);
-    throw err;
-  }
-}
-
 fetch("get_nota.php?dts=' . addslashes($dtc) . '")
-.then(res => res.json())
-.then(data => {
+.then(function(res) { return res.json(); })
+.then(function(data) {
   console.log("✅ Parsed JSON:", data);
-  fetch("https://localhost:3000/print/nota", {
+  if (typeof printBridgeNota === "function") {
+    return printBridgeNota(data.data);
+  }
+  return fetch("http://localhost:3000/print/nota", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data.data)
-  })
-  .then(res => {
-    const ct = res.headers.get("content-type") || "";
-    if (!res.ok) {
-      if (ct.includes("application/json")) {
-        return res.json().then(obj => Promise.reject({ status: res.status, body: obj }));
-      } else {
-        return res.text().then(txt => Promise.reject({ status: res.status, body: txt }));
-      }
-    }
-    if (ct.includes("application/json")) return res.json();
-    return res.text();
-  })
-  .then(result => {
+  }).then(function(res) {
+    if (!res.ok) throw new Error("Print bridge gagal");
+    return res.json();
+  }).then(function(result) {
     console.log("✅ Response from print bridge:", result);
-  })
-  .catch(err => {
-    console.error("❌ Print request failed:", err);
-    // Fallback: coba print server alternatif
-    fetch("get_nota.php?dts=' . addslashes($dtc) . '")
-    .then(res => res.json())
-    .then(data => {
-      fetch("http://localhost:8080/print/nota", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data.data)
-      })
-      .then(res => {
-        if (res.ok) {
-          console.log("✅ Nota dikirim ke print server alternatif");
-        }
-      })
-      .catch(err => {
-        console.error("❌ Print server alternatif juga gagal:", err);
-      });
-    });
   });
 })
-.catch(err => {
-  console.error("❌ Error fetching nota data:", err);
+.catch(function(err) {
+  console.error("❌ Error cetak nota:", err);
 });
 </script>';
     

@@ -26,8 +26,8 @@ CARA SETUP (sekali saja, ~3 menit)
 3. Tunggu sampai muncul "SETUP SELESAI"
 
 4. Jika cetak dari web masih gagal, buka sekali di browser kasir:
-   https://localhost:3000/health
-   Klik "Advanced" -> "Proceed to localhost (unsafe)"
+   http://localhost:3000/health
+   Harus muncul JSON {"ok":true,...}
 
 5. Selesai! Print bridge jalan OTOMATIS setiap login Windows.
 
@@ -42,18 +42,17 @@ KASIR TIDAK PERLU:
 CEK APAKAH SUDAH JALAN
 --------------------------------------------------------------------------------
 Double-click: cek-printer.bat
-Atau buka browser: https://localhost:3000/health
+Atau buka browser: http://localhost:3000/health
 
-Harus muncul: {"ok":true,"https":true,"displayName":"BP-LITE 80D+80X Printer",...}
+Harus muncul: {"ok":true,"http":"http://localhost:3000",...}
 
 --------------------------------------------------------------------------------
 JIKA CETAK GAGAL
 --------------------------------------------------------------------------------
 1. Jalankan cek-printer.bat
-2. Jalankan terima-sertifikat.bat (jika browser blokir HTTPS)
-3. Pastikan printer menyala dan kertas ada
-4. Restart PC kasir
-5. Jika masih gagal, jalankan ulang setup-kasir.bat
+2. Jalankan terima-sertifikat.bat (hanya jika pakai HTTPS port 3443)
+3. Jalankan restart-kasir.bat
+4. Pastikan printer menyala dan kertas ada
 
 --------------------------------------------------------------------------------
 SETUP LANJUTAN (opsional, untuk IT/developer)
@@ -67,6 +66,7 @@ FILE PENTING
 --------------------------------------------------------------------------------
 setup-kasir.bat        -> SETUP UTAMA (jalankan ini)
 cek-printer.bat        -> cek status + test cetak
+restart-kasir.bat      -> restart print-bridge tanpa reboot PC
 terima-sertifikat.bat  -> terima sertifikat HTTPS (sekali)
 start-hidden.vbs       -> jalan di background (otomatis)
 server.js              -> program print bridge (HTTPS)

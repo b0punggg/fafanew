@@ -1,5 +1,5 @@
 param(
-    [string]$Url = 'https://localhost:3000/health',
+    [string]$Url = 'http://localhost:3000/health',
     [string]$Method = 'GET',
     [string]$Body = '',
     [int]$TimeoutSec = 10

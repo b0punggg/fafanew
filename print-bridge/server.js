@@ -1,20 +1,22 @@
 /**
  * Print Bridge - layanan cetak lokal di PC kasir (Windows).
- * HTTPS agar browser HTTPS (Hostinger) boleh fetch ke localhost.
+ * HTTP port 3000 selalu aktif; HTTPS port 3443 opsional.
  */
 const express = require('express');
+const http = require('http');
 const https = require('https');
 const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { exec } = require('child_process');
-const { ensureSslCerts } = require('./generate-cert');
 const { buildNotaText } = require('./nota-layout');
 
-const PORT = process.env.PORT || 3000;
+const PORT = Number(process.env.PORT) || 3000;
+const HTTPS_PORT = Number(process.env.HTTPS_PORT) || 3443;
 const CONFIG_PATH = path.join(__dirname, 'printer-config.json');
 const RAW_PRINT_PS1 = path.join(__dirname, 'raw-print.ps1');
+const LOG_DIR = path.join(__dirname, 'logs');
 const EXEC_TIMEOUT_MS = 20000;
 
 function loadConfig() {
@@ -34,6 +36,20 @@ function loadConfig() {
   return defaults;
 }
 
+function loadSslCerts() {
+  try {
+    const { ensureSslCerts } = require('./generate-cert');
+    const { certPath, keyPath } = ensureSslCerts();
+    return {
+      cert: fs.readFileSync(certPath),
+      key: fs.readFileSync(keyPath),
+    };
+  } catch (e) {
+    console.warn('HTTPS tidak tersedia:', e.message);
+    return null;
+  }
+}
+
 const PRINTER_CFG = loadConfig();
 
 const app = express();
@@ -44,22 +60,19 @@ app.use(express.text({ limit: '10mb', type: 'text/plain' }));
 function execCommand(cmd, timeoutMs) {
   const limit = timeoutMs || EXEC_TIMEOUT_MS;
   return new Promise((resolve, reject) => {
-    const child = exec(
+    exec(
       cmd,
       { windowsHide: true, maxBuffer: 1024 * 1024, timeout: limit },
       (err, stdout, stderr) => {
         const out = ((stdout || '') + (stderr || '')).trim();
         if (err) {
-          const msg = out || err.message || 'Perintah gagal';
-          const error = new Error(msg);
+          const error = new Error(out || err.message || 'Perintah gagal');
           error.output = out;
-          error.killed = err.killed;
           return reject(error);
         }
         resolve(out);
       }
     );
-    child.on('error', reject);
   });
 }
 
@@ -166,10 +179,12 @@ async function printWithFallback(buffer) {
 app.get('/health', (req, res) => {
   res.json({
     ok: true,
-    https: true,
+    http: 'http://localhost:' + PORT,
+    https: global.HTTPS_ACTIVE ? 'https://localhost:' + HTTPS_PORT : null,
     displayName: PRINTER_CFG.displayName,
     shareName: PRINTER_CFG.shareName,
     port: PORT,
+    httpsPort: global.HTTPS_ACTIVE ? HTTPS_PORT : null,
   });
 });
 
@@ -232,17 +247,28 @@ app.post('/print/html', async (req, res) => {
   }
 });
 
-const { certPath, keyPath } = ensureSslCerts();
-const sslOptions = {
-  cert: fs.readFileSync(certPath),
-  key: fs.readFileSync(keyPath),
-};
+if (!fs.existsSync(LOG_DIR)) {
+  fs.mkdirSync(LOG_DIR);
+}
 
-https.createServer(sslOptions, app).listen(PORT, () => {
-  console.log('Print bridge running on https://localhost:' + PORT);
-  console.log('Printer display : ' + PRINTER_CFG.displayName);
-  console.log('Printer share   : ' + PRINTER_CFG.shareName);
-  console.log('');
-  console.log('PENTING: Buka https://localhost:' + PORT + '/health di browser kasir');
-  console.log('         dan terima sertifikat (sekali saja) agar cetak dari web berjalan.');
+global.HTTPS_ACTIVE = false;
+
+http.createServer(app).listen(PORT, '127.0.0.1', () => {
+  console.log('Print bridge HTTP  : http://localhost:' + PORT);
+  console.log('Printer display    : ' + PRINTER_CFG.displayName);
+  console.log('Printer share      : ' + PRINTER_CFG.shareName);
+});
+
+const ssl = loadSslCerts();
+if (ssl) {
+  https.createServer(ssl, app).listen(HTTPS_PORT, '127.0.0.1', () => {
+    global.HTTPS_ACTIVE = true;
+    console.log('Print bridge HTTPS : https://localhost:' + HTTPS_PORT);
+  });
+}
+
+process.on('uncaughtException', (err) => {
+  const line = '[' + new Date().toISOString() + '] ' + err.stack + '\n';
+  try { fs.appendFileSync(path.join(LOG_DIR, 'bridge-error.log'), line); } catch (e) {}
+  console.error(err);
 });

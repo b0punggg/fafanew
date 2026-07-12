@@ -84,7 +84,7 @@ if errorlevel 1 (
     echo [OK] Service RUNNING
 )
 
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0http-helper.ps1" -Url "https://localhost:3000/health" -TimeoutSec 8
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0http-helper.ps1" -Url "http://localhost:3000/health" -TimeoutSec 8
 echo.
 echo Setup service selesai. Print bridge jalan otomatis saat Windows boot.
 pause

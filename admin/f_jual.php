@@ -25,6 +25,7 @@
     <script type="text/javascript" src="../assets/js/jquery.mask.min.js"></script> 
     <script type="text/javascript" src="../assets/js/bootstrap.min.js"></script>
     <script src="../assets/js/html5-qrcode.min.js"></script>
+    <script src="print_bridge_client.js"></script>
   </head>
   <style>
     body,h2,h3,h4,h5,h6 {font-family: "Helvetica", arial}

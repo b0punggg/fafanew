@@ -3,7 +3,6 @@
  */
 const fs = require('fs');
 const path = require('path');
-const selfsigned = require('selfsigned');
 
 const SSL_DIR = path.join(__dirname, 'ssl');
 const CERT_PATH = path.join(SSL_DIR, 'cert.pem');
@@ -12,6 +11,13 @@ const KEY_PATH = path.join(SSL_DIR, 'key.pem');
 function ensureSslCerts() {
   if (fs.existsSync(CERT_PATH) && fs.existsSync(KEY_PATH)) {
     return { certPath: CERT_PATH, keyPath: KEY_PATH };
+  }
+
+  let selfsigned;
+  try {
+    selfsigned = require('selfsigned');
+  } catch (e) {
+    throw new Error('Paket selfsigned belum terinstall. Jalankan: npm install');
   }
 
   if (!fs.existsSync(SSL_DIR)) {
