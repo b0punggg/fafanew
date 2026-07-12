@@ -10,7 +10,6 @@ const os = require('os');
 const https = require('https');
 const { exec } = require('child_process');
 const { ensureSslCerts } = require('./generate-cert');
-const { buildNotaText, loadLogoRaster } = require('./nota-builder');
 
 const PORT = process.env.PORT || 3000;
 const CONFIG_PATH = path.join(__dirname, 'printer-config.json');
@@ -21,10 +20,6 @@ function loadConfig() {
     displayName: process.env.PRINTER_DISPLAY_NAME || 'BP-LITE 80D+80X Printer',
     shareName: process.env.PRINTER_SHARE_NAME || 'BP-LITE80D',
     altNames: ['BP-LITE 80D+80X Printer', 'BP-LITE80D', 'BP-LITE 80D+80X'],
-    nmToko: 'Fafa COLLECTION',
-    alToko: 'Pasar Pracimantoro',
-    allowCopy: false,
-    includeLogo: false,
   };
   try {
     if (fs.existsSync(CONFIG_PATH)) {
@@ -75,40 +70,171 @@ function isCopySuccess(output) {
   return /1 file\(s\) copied/.test(o) || /1 file copied/.test(o) || /1 berkas/.test(o);
 }
 
-function getPrinterNames() {
-  const names = [];
-  function add(name) {
-    if (name && names.indexOf(name) === -1) {
-      names.push(name);
+// Port fungsi PHP: spasistr / spasinum (padding kiri)
+function spasi(str, len) {
+  str = String(str ?? '');
+  if (str.length >= len) return str.substring(0, len);
+  return ' '.repeat(len - str.length) + str;
+}
+
+function spasicenter(str, width) {
+  str = String(str ?? '');
+  if (str.length >= width) return str.substring(0, width);
+  const left = Math.floor((width - str.length) / 2);
+  return ' '.repeat(left) + str + ' '.repeat(width - str.length - left);
+}
+
+// Port fungsi PHP: gantiti (format angka ribuan dengan titik)
+function gantiti(b) {
+  let minus = false;
+  let num = Math.round(Number(b) || 0);
+  if (num < 0) {
+    minus = true;
+    num = -num;
+  }
+  const s = String(num);
+  let c = '';
+  let j = 0;
+  for (let i = s.length; i > 0; i--) {
+    j += 1;
+    if (j % 3 === 1 && j !== 1) {
+      c = s.charAt(i - 1) + '.' + c;
+    } else {
+      c = s.charAt(i - 1) + c;
     }
   }
-  add(PRINTER_CFG.displayName);
-  add(PRINTER_CFG.shareName);
-  (PRINTER_CFG.altNames || []).forEach(add);
-  return names;
+  return (minus ? '-' : '') + c;
+}
+
+function fmtAmount(val) {
+  if (val === null || val === undefined || val === '') {
+    return gantiti(0);
+  }
+  if (typeof val === 'string' && /^-?\d{1,3}(\.\d{3})*$/.test(val)) {
+    return val;
+  }
+  return gantiti(val);
+}
+
+function amountPositive(val) {
+  const raw = String(val ?? '').replace(/\./g, '');
+  const n = Number(raw);
+  return !isNaN(n) && n > 0;
+}
+
+function buildNotaText(data) {
+  const cutPaper = Buffer.from([0x1d, 0x56, 0x30, 0x00]);
+  const openDrawer = Buffer.from([0x1b, 0x70, 0x30, 0x19, 0xfa]);
+  const def = 1;
+  const p = () => spasi('', def);
+  const lines = [];
+
+  const nmToko = data.nm_toko || 'TOKOFAFA';
+  const alToko = data.al_toko || '';
+
+  lines.push(p() + spasicenter(nmToko, 47));
+  if (alToko) {
+    lines.push(spasicenter(alToko, 47 + def));
+  }
+  lines.push('');
+
+  lines.push(p() + 'No.Struk ' + spasi('', 5) + ':' + spasi(data.no_fakjual || '', 20));
+  lines.push(p() + 'Tanggal  ' + spasi('', 5) + ':' + spasi(data.tgltime || '', 20));
+
+  if (data.nm_member) {
+    lines.push(p() + 'Member   ' + spasi('', 5) + ':' + spasi(data.nm_member, 30));
+    if (amountPositive(data.poin_earned)) {
+      lines.push(p() + 'Poin Dapat' + spasi('', 3) + ':' + spasi(fmtAmount(data.poin_earned) + ' Poin', 30));
+    }
+    if (data.poin_saldo !== undefined && data.poin_saldo !== null) {
+      lines.push(p() + 'Poin Saldo' + spasi('', 3) + ':' + spasi(fmtAmount(data.poin_saldo) + ' Poin', 30));
+    }
+  }
+
+  lines.push(p() + '-----------------------------------------------');
+  lines.push(p() + 'No.' + spasi('', 5) + 'Nama Barang');
+  lines.push(
+    p() +
+    spasi('', 5) +
+    spasi('Jml', 10) +
+    spasi('Disc%', 12) +
+    spasi('Harga', 11) +
+    spasi('SubTotal', 12)
+  );
+  lines.push(p() + '-----------------------------------------------');
+
+  (data.items || []).forEach((item, idx) => {
+    const no = idx + 1;
+    lines.push(p() + spasi(no, 3) + '.' + spasi('', 1) + (item.nmbrg || ''));
+    lines.push(
+      spasi('', 4 + def) +
+      spasi(item.qty || 0, 3) +
+      spasi(item.sat || '', 5) +
+      spasi(item.disc || 0, 9) +
+      spasi('', 2) +
+      spasi(fmtAmount(item.hrg), 9) +
+      spasi('', 2) +
+      spasi(fmtAmount(item.subtot), 12)
+    );
+  });
+
+  lines.push(p() + '-----------------------------------------------');
+
+  function moneyLine(label, amount) {
+    return spasi('', 7 + def) + spasi(label, 15) + spasi('', 4) + 'Rp. ' + spasi(fmtAmount(amount), 16);
+  }
+
+  lines.push(moneyLine('Total', data.belanja || 0));
+
+  if (amountPositive(data.disctot)) {
+    lines.push(moneyLine('Disc Nota', data.disctot));
+  }
+  if (amountPositive(data.ongkir)) {
+    lines.push(moneyLine('Ongkir', data.ongkir));
+  }
+
+  const kdBayar = String(data.kd_bayar || 'TUNAI').toUpperCase();
+  if (kdBayar === 'TUNAI') {
+    lines.push(moneyLine('Uang Tunai', data.bayar || 0));
+    lines.push(moneyLine('Kembali', data.susuk || 0));
+  } else {
+    lines.push(moneyLine('Uang Tunai', data.bayar || 0));
+    lines.push(moneyLine('Kekurangan', data.saldohut || 0));
+    lines.push(spasi('', 7 + def) + spasi('Jatuh Tempo', 15) + spasi('', 4) + 'Rp. ' + spasi(data.jtempo || '', 16));
+  }
+
+  lines.push('');
+  lines.push(spasicenter('BARANG YG.SUDAH DIBELI TDK BISA DIKEMBALIKAN', 46 + def));
+  lines.push(spasicenter('*TERIMA KASIH*', 47 + def));
+  lines.push('');
+  lines.push('');
+
+  const text = openDrawer.toString('binary') + lines.join('\n') + '\n\n\n\n\n\n';
+  return Buffer.concat([Buffer.from(text, 'binary'), cutPaper]);
 }
 
 function getPrinterTargets() {
-  const names = getPrinterNames();
   const targets = [];
-
-  // WinSpool RAW — satu-satunya metode andal untuk printer thermal ESC/POS
-  names.forEach((name) => {
-    targets.push({ name, method: 'winspool', key: name + '|winspool' });
-  });
-
-  if (PRINTER_CFG.allowCopy === true) {
-    names.forEach((name) => {
-      targets.push({ name, method: 'copy', key: name + '|copy' });
-    });
+  function add(name, method) {
+    if (!name) return;
+    const key = name + '|' + method;
+    if (!targets.some((t) => t.key === key)) {
+      targets.push({ name, method, key });
+    }
   }
 
+  // Share copy dulu (cepat), lalu WinSpool display name, sisanya fallback
+  add(PRINTER_CFG.shareName, 'copy');
+  add(PRINTER_CFG.displayName, 'winspool');
+  add(PRINTER_CFG.displayName, 'print');
+  (PRINTER_CFG.altNames || []).forEach((n) => {
+    if (n !== PRINTER_CFG.shareName && n !== PRINTER_CFG.displayName) {
+      add(n, 'copy');
+      add(n, 'winspool');
+      add(n, 'print');
+    }
+  });
   return targets;
-}
-
-function winSpoolTimeout(buffer) {
-  // Timeout lebih longgar — pertama kali raw-print.ps1 compile DLL bisa lambat
-  return Math.max(60000, 20000 + Math.floor(buffer.length / 20));
 }
 
 async function printViaWinSpool(buffer, printerName) {
@@ -116,7 +242,7 @@ async function printViaWinSpool(buffer, printerName) {
   fs.writeFileSync(tmpFile, buffer);
   try {
     const cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "' + RAW_PRINT_PS1 + '" -PrinterName "' + printerName + '" -FilePath "' + tmpFile + '"';
-    const out = await execCommand(cmd, winSpoolTimeout(buffer));
+    const out = await execCommand(cmd, 10000);
     if (out.indexOf('OK') !== -1) {
       return { method: 'winspool', printer: printerName, output: out };
     }
@@ -131,11 +257,23 @@ async function printViaCopy(buffer, printerName) {
   fs.writeFileSync(tmpFile, buffer);
   try {
     const cmd = 'copy /B "' + tmpFile + '" "\\\\localhost\\' + printerName + '"';
-    const out = await execCommand(cmd, 8000);
+    const out = await execCommand(cmd, 5000);
     if (!isCopySuccess(out)) {
       throw new Error(out || 'Copy gagal');
     }
     return { method: 'copy', printer: printerName, output: out };
+  } finally {
+    try { fs.unlinkSync(tmpFile); } catch (e) {}
+  }
+}
+
+async function printViaPrintCmd(buffer, printerName) {
+  const tmpFile = path.join(os.tmpdir(), 'thprint_' + Date.now() + '.bin');
+  fs.writeFileSync(tmpFile, buffer);
+  try {
+    const cmd = 'print /D:"' + printerName + '" "' + tmpFile + '"';
+    const out = await execCommand(cmd, 10000);
+    return { method: 'print', printer: printerName, output: out };
   } finally {
     try { fs.unlinkSync(tmpFile); } catch (e) {}
   }
@@ -148,14 +286,13 @@ async function printWithFallback(buffer) {
   for (const target of targets) {
     try {
       if (target.method === 'winspool') {
-        const result = await printViaWinSpool(buffer, target.name);
-        console.log('Cetak OK', result.method, result.printer, buffer.length + ' bytes');
-        return result;
+        return await printViaWinSpool(buffer, target.name);
       }
       if (target.method === 'copy') {
-        const result = await printViaCopy(buffer, target.name);
-        console.log('Cetak OK', result.method, result.printer, buffer.length + ' bytes');
-        return result;
+        return await printViaCopy(buffer, target.name);
+      }
+      if (target.method === 'print') {
+        return await printViaPrintCmd(buffer, target.name);
       }
     } catch (e) {
       errors.push(target.method + ':' + target.name + ' -> ' + e.message);
@@ -166,44 +303,12 @@ async function printWithFallback(buffer) {
   throw new Error(errors.join(' | ') || 'Semua metode cetak gagal');
 }
 
-async function printNotaBuffer(data) {
-  const storeConfig = {
-    nmToko: data.nm_toko || PRINTER_CFG.nmToko,
-    alToko: data.al_toko || PRINTER_CFG.alToko,
-    includeLogo: PRINTER_CFG.includeLogo === true,
-  };
-
-  const buffer = buildNotaText(data, storeConfig);
-  const result = await printWithFallback(buffer);
-  result.logo = storeConfig.includeLogo;
-  return result;
-}
-
-async function prewarmWinSpool() {
-  const printer = PRINTER_CFG.displayName || 'BP-LITE 80D+80X Printer';
-  const testBuf = Buffer.from([0x1b, 0x40]);
-  const tmpFile = path.join(os.tmpdir(), 'thprint_prewarm_' + Date.now() + '.bin');
-  fs.writeFileSync(tmpFile, testBuf);
-  try {
-    const cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "' + RAW_PRINT_PS1 + '" -PrinterName "' + printer + '" -FilePath "' + tmpFile + '"';
-    const out = await execCommand(cmd, 90000);
-    console.log('Prewarm WinSpool:', out.indexOf('OK') !== -1 ? 'OK' : out);
-  } catch (e) {
-    console.warn('Prewarm WinSpool gagal (akan dicoba lagi saat cetak):', e.message);
-  } finally {
-    try { fs.unlinkSync(tmpFile); } catch (err) {}
-  }
-}
-
 app.get('/health', (req, res) => {
   res.json({
     ok: true,
     protocol: 'https',
     displayName: PRINTER_CFG.displayName,
     shareName: PRINTER_CFG.shareName,
-    allowCopy: PRINTER_CFG.allowCopy === true,
-    hasLogo: loadLogoRaster().length > 0,
-    includeLogo: PRINTER_CFG.includeLogo === true,
     port: PORT,
   });
 });
@@ -240,10 +345,8 @@ app.post('/print/raw', async (req, res) => {
 app.post('/print/nota', async (req, res) => {
   try {
     const data = req.body.data || req.body;
-    if (!data || !(data.items && data.items.length)) {
-      return res.status(400).json({ success: false, error: 'Data nota kosong atau items tidak ada' });
-    }
-    const result = await printNotaBuffer(data);
+    const buffer = buildNotaText(data);
+    const result = await printWithFallback(buffer);
     res.json({ success: true, ...result });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
@@ -254,9 +357,8 @@ app.post('/print/html', async (req, res) => {
   try {
     const html = req.body.html || '';
     const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() + '\n\n\n';
-    const init = Buffer.from([0x1b, 0x40]);
     const cutPaper = Buffer.from([0x1d, 0x56, 0x30, 0x00]);
-    const buffer = Buffer.concat([init, Buffer.from(text, 'latin1'), cutPaper]);
+    const buffer = Buffer.concat([Buffer.from(text, 'utf8'), cutPaper]);
     const result = await printWithFallback(buffer);
     res.json({ success: true, ...result });
   } catch (e) {
@@ -274,10 +376,7 @@ https.createServer(credentials, app).listen(PORT, () => {
   console.log('Print bridge running on https://localhost:' + PORT);
   console.log('Printer display : ' + PRINTER_CFG.displayName);
   console.log('Printer share   : ' + PRINTER_CFG.shareName);
-  console.log('Metode copy     : ' + (PRINTER_CFG.allowCopy === true ? 'aktif' : 'nonaktif (WinSpool only)'));
-  console.log('Logo nota       : ' + (PRINTER_CFG.includeLogo === true ? 'aktif' : 'nonaktif'));
   console.log('');
   console.log('PENTING: Buka https://localhost:' + PORT + '/health di browser');
   console.log('         lalu klik "Lanjutkan" / accept sertifikat (sekali saja).');
-  prewarmWinSpool();
 });

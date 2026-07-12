@@ -148,9 +148,6 @@
     ]);
     
     header('Content-Type: application/json');
-
-    $bridgeUrl = PRINT_BRIDGE_URL;
-    $bridgeUrlAlt = PRINT_BRIDGE_URL_ALT;
     
     // Gunakan metode script lama yang terbukti bekerja - kirim JSON data langsung ke print server
     $script_content = '<script>
@@ -175,7 +172,7 @@ fetch("get_nota.php?dts=' . addslashes($dtc) . '")
 .then(res => res.json())
 .then(data => {
   console.log("✅ Parsed JSON:", data);
-  fetch("' . $bridgeUrl . '/print/nota", {
+  fetch("<?= PRINT_BRIDGE_URL ?>/print/nota", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data.data)
@@ -201,7 +198,7 @@ fetch("get_nota.php?dts=' . addslashes($dtc) . '")
     fetch("get_nota.php?dts=' . addslashes($dtc) . '")
     .then(res => res.json())
     .then(data => {
-      fetch("' . $bridgeUrlAlt . '/print/nota", {
+      fetch("<?= PRINT_BRIDGE_URL_ALT ?>/print/nota", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data.data)
