@@ -26,10 +26,19 @@ function loadLogoRaster() {
 }
 
 function stripLeadingInit(buf) {
-  if (buf.length >= 2 && buf[0] === 0x1b && buf[1] === 0x40) {
-    return buf.slice(2);
+  let start = 0;
+  while (start < buf.length && buf[start] === 0x1b) {
+    if (start + 1 < buf.length && buf[start + 1] === 0x40) {
+      start += 2;
+      continue;
+    }
+    if (start + 2 < buf.length && buf[start + 1] === 0x61) {
+      start += 3;
+      continue;
+    }
+    break;
   }
-  return buf;
+  return start > 0 ? buf.slice(start) : buf;
 }
 
 function padRight(str, len) {
@@ -100,6 +109,8 @@ function buildNotaText(data, config) {
   const init = Buffer.from([0x1b, 0x40]);
   const openDrawer = Buffer.from([0x1b, 0x70, 0x30, 0x19, 0xfa]);
   const cutPaper = Buffer.from([0x1d, 0x56, 0x30, 0x00]);
+  const alignCenter = Buffer.from([0x1b, 0x61, 0x01]);
+  const alignLeft = Buffer.from([0x1b, 0x61, 0x00]);
 
   const lines = [];
   const sep = '-'.repeat(LINE_WIDTH);
@@ -180,13 +191,13 @@ function buildNotaText(data, config) {
   lines.push('');
 
   const textBody = lines.join('\n') + '\n\n\n';
-  const chunks = [init, openDrawer];
+  const chunks = [init];
 
   if (includeLogo) {
-    chunks.push(stripLeadingInit(loadLogoRaster()));
+    chunks.push(alignCenter, stripLeadingInit(loadLogoRaster()), alignLeft);
   }
 
-  chunks.push(Buffer.from(textBody, 'latin1'), cutPaper);
+  chunks.push(Buffer.from(textBody, 'latin1'), cutPaper, openDrawer);
   return Buffer.concat(chunks);
 }
 
