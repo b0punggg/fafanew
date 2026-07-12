@@ -25,6 +25,13 @@ function loadLogoRaster() {
   return cachedLogo;
 }
 
+function stripLeadingInit(buf) {
+  if (buf.length >= 2 && buf[0] === 0x1b && buf[1] === 0x40) {
+    return buf.slice(2);
+  }
+  return buf;
+}
+
 function padRight(str, len) {
   str = String(str || '');
   return str.length >= len ? str.substring(0, len) : str + ' '.repeat(len - str.length);
@@ -83,20 +90,21 @@ function moneyLine(label, amount) {
 }
 
 function buildNotaText(data, config) {
-  const store = Object.assign({}, DEFAULT_STORE, config || {}, {
-    nmToko: (data && data.nm_toko) || (config && config.nmToko) || DEFAULT_STORE.nmToko,
-    alToko: (data && data.al_toko) || (config && config.alToko) || DEFAULT_STORE.alToko,
+  const cfg = config || {};
+  const store = Object.assign({}, DEFAULT_STORE, cfg, {
+    nmToko: (data && data.nm_toko) || cfg.nmToko || DEFAULT_STORE.nmToko,
+    alToko: (data && data.al_toko) || cfg.alToko || DEFAULT_STORE.alToko,
   });
+  const includeLogo = cfg.includeLogo !== false && loadLogoRaster().length > 0;
 
   const init = Buffer.from([0x1b, 0x40]);
   const openDrawer = Buffer.from([0x1b, 0x70, 0x30, 0x19, 0xfa]);
   const cutPaper = Buffer.from([0x1d, 0x56, 0x30, 0x00]);
-  const logo = loadLogoRaster();
 
   const lines = [];
   const sep = '-'.repeat(LINE_WIDTH);
 
-  if (logo.length === 0) {
+  if (!includeLogo) {
     lines.push(center(store.nmToko, LINE_WIDTH));
   }
   lines.push(center(store.alToko, LINE_WIDTH));
@@ -119,7 +127,7 @@ function buildNotaText(data, config) {
     const no = String(idx + 1) + '.';
     const subtot = formatAmount(item.subtot || 0);
     const name = String(item.nmbrg || '');
-    const nameWidth = LINE_WIDTH - 4 - subtot.length;
+    const nameWidth = Math.max(4, LINE_WIDTH - 4 - subtot.length);
     lines.push(padRight(no, 4) + padRight(name, nameWidth) + subtot);
 
     const qtySat = String(item.qty || 0) + String(item.sat || '').toLowerCase();
@@ -172,11 +180,13 @@ function buildNotaText(data, config) {
   lines.push('');
 
   const textBody = lines.join('\n') + '\n\n\n';
-  const chunks = [openDrawer, init];
-  if (logo.length > 0) {
-    chunks.push(logo);
+  const chunks = [init, openDrawer];
+
+  if (includeLogo) {
+    chunks.push(stripLeadingInit(loadLogoRaster()));
   }
-  chunks.push(Buffer.from(textBody, 'utf8'), cutPaper);
+
+  chunks.push(Buffer.from(textBody, 'latin1'), cutPaper);
   return Buffer.concat(chunks);
 }
 

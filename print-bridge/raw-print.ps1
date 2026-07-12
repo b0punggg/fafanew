@@ -10,7 +10,7 @@ if (-not (Test-Path -LiteralPath $FilePath)) {
 
 $bytes = [System.IO.File]::ReadAllBytes($FilePath)
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$dllPath = Join-Path $scriptDir 'RawPrinterHelper.dll'
+$dllPath = Join-Path $scriptDir 'RawPrinterHelper.v2.dll'
 
 $source = @"
 using System;
@@ -54,6 +54,9 @@ public class RawPrinterHelper {
         ClosePrinter(hPrinter);
         return ok && dwWritten == bytes.Length;
     }
+    public static int GetLastErrorCode() {
+        return Marshal.GetLastWin32Error();
+    }
 }
 "@
 
@@ -67,7 +70,8 @@ try {
         Write-Output "OK"
         exit 0
     }
-    Write-Error "WritePrinter gagal untuk $PrinterName"
+    $err = [RawPrinterHelper]::GetLastErrorCode()
+    Write-Error "WritePrinter gagal untuk $PrinterName (win32=$err, bytes=$($bytes.Length))"
     exit 1
 } catch {
     Write-Error $_.Exception.Message

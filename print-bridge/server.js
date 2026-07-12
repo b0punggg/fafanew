@@ -10,7 +10,7 @@ const os = require('os');
 const https = require('https');
 const { exec } = require('child_process');
 const { ensureSslCerts } = require('./generate-cert');
-const { buildNotaText } = require('./nota-builder');
+const { buildNotaText, loadLogoRaster } = require('./nota-builder');
 
 const PORT = process.env.PORT || 3000;
 const CONFIG_PATH = path.join(__dirname, 'printer-config.json');
@@ -23,6 +23,7 @@ function loadConfig() {
     altNames: ['BP-LITE 80D+80X Printer', 'BP-LITE80D', 'BP-LITE 80D+80X'],
     nmToko: 'Fafa COLLECTION',
     alToko: 'Pasar Pracimantoro',
+    allowCopy: false,
   };
   try {
     if (fs.existsSync(CONFIG_PATH)) {
@@ -73,28 +74,44 @@ function isCopySuccess(output) {
   return /1 file\(s\) copied/.test(o) || /1 file copied/.test(o) || /1 berkas/.test(o);
 }
 
-function getPrinterTargets() {
-  const targets = [];
-  function add(name, method) {
-    if (!name) return;
-    const key = name + '|' + method;
-    if (!targets.some((t) => t.key === key)) {
-      targets.push({ name, method, key });
+function getPrinterNames() {
+  const names = [];
+  function add(name) {
+    if (name && names.indexOf(name) === -1) {
+      names.push(name);
     }
   }
+  add(PRINTER_CFG.displayName);
+  add(PRINTER_CFG.shareName);
+  (PRINTER_CFG.altNames || []).forEach(add);
+  return names;
+}
 
-  // Share copy dulu (cepat), lalu WinSpool display name, sisanya fallback
-  add(PRINTER_CFG.shareName, 'copy');
-  add(PRINTER_CFG.displayName, 'winspool');
-  add(PRINTER_CFG.displayName, 'print');
-  (PRINTER_CFG.altNames || []).forEach((n) => {
-    if (n !== PRINTER_CFG.shareName && n !== PRINTER_CFG.displayName) {
-      add(n, 'copy');
-      add(n, 'winspool');
-      add(n, 'print');
-    }
+function getPrinterTargets() {
+  const names = getPrinterNames();
+  const targets = [];
+
+  // WinSpool RAW paling andal untuk ESC/POS — coba semua nama printer dulu
+  names.forEach((name) => {
+    targets.push({ name, method: 'winspool', key: name + '|winspool' });
   });
+
+  names.forEach((name) => {
+    targets.push({ name, method: 'print', key: name + '|print' });
+  });
+
+  // copy /B sering "sukses" tanpa kertas keluar — hanya jika diizinkan
+  if (PRINTER_CFG.allowCopy === true) {
+    names.forEach((name) => {
+      targets.push({ name, method: 'copy', key: name + '|copy' });
+    });
+  }
+
   return targets;
+}
+
+function winSpoolTimeout(buffer) {
+  return Math.max(30000, 15000 + Math.floor(buffer.length / 50));
 }
 
 async function printViaWinSpool(buffer, printerName) {
@@ -102,7 +119,7 @@ async function printViaWinSpool(buffer, printerName) {
   fs.writeFileSync(tmpFile, buffer);
   try {
     const cmd = 'powershell -NoProfile -ExecutionPolicy Bypass -File "' + RAW_PRINT_PS1 + '" -PrinterName "' + printerName + '" -FilePath "' + tmpFile + '"';
-    const out = await execCommand(cmd, 10000);
+    const out = await execCommand(cmd, winSpoolTimeout(buffer));
     if (out.indexOf('OK') !== -1) {
       return { method: 'winspool', printer: printerName, output: out };
     }
@@ -117,7 +134,7 @@ async function printViaCopy(buffer, printerName) {
   fs.writeFileSync(tmpFile, buffer);
   try {
     const cmd = 'copy /B "' + tmpFile + '" "\\\\localhost\\' + printerName + '"';
-    const out = await execCommand(cmd, 5000);
+    const out = await execCommand(cmd, 8000);
     if (!isCopySuccess(out)) {
       throw new Error(out || 'Copy gagal');
     }
@@ -132,7 +149,7 @@ async function printViaPrintCmd(buffer, printerName) {
   fs.writeFileSync(tmpFile, buffer);
   try {
     const cmd = 'print /D:"' + printerName + '" "' + tmpFile + '"';
-    const out = await execCommand(cmd, 10000);
+    const out = await execCommand(cmd, 15000);
     return { method: 'print', printer: printerName, output: out };
   } finally {
     try { fs.unlinkSync(tmpFile); } catch (e) {}
@@ -146,13 +163,19 @@ async function printWithFallback(buffer) {
   for (const target of targets) {
     try {
       if (target.method === 'winspool') {
-        return await printViaWinSpool(buffer, target.name);
+        const result = await printViaWinSpool(buffer, target.name);
+        console.log('Cetak OK', result.method, result.printer, buffer.length + ' bytes');
+        return result;
       }
       if (target.method === 'copy') {
-        return await printViaCopy(buffer, target.name);
+        const result = await printViaCopy(buffer, target.name);
+        console.log('Cetak OK', result.method, result.printer, buffer.length + ' bytes');
+        return result;
       }
       if (target.method === 'print') {
-        return await printViaPrintCmd(buffer, target.name);
+        const result = await printViaPrintCmd(buffer, target.name);
+        console.log('Cetak OK', result.method, result.printer, buffer.length + ' bytes');
+        return result;
       }
     } catch (e) {
       errors.push(target.method + ':' + target.name + ' -> ' + e.message);
@@ -163,12 +186,48 @@ async function printWithFallback(buffer) {
   throw new Error(errors.join(' | ') || 'Semua metode cetak gagal');
 }
 
+async function printNotaBuffer(data) {
+  const storeConfig = {
+    nmToko: data.nm_toko || PRINTER_CFG.nmToko,
+    alToko: data.al_toko || PRINTER_CFG.alToko,
+    includeLogo: true,
+  };
+
+  const attempts = [
+    { includeLogo: true, label: 'dengan logo' },
+    { includeLogo: false, label: 'tanpa logo' },
+  ];
+
+  const errors = [];
+  for (let i = 0; i < attempts.length; i++) {
+    const attempt = attempts[i];
+    if (i === 1 && loadLogoRaster().length === 0) {
+      continue;
+    }
+    const buffer = buildNotaText(data, Object.assign({}, storeConfig, {
+      includeLogo: attempt.includeLogo,
+    }));
+    try {
+      const result = await printWithFallback(buffer);
+      result.logo = attempt.includeLogo;
+      return result;
+    } catch (e) {
+      errors.push(attempt.label + ': ' + e.message);
+      console.warn('Cetak nota gagal', attempt.label, e.message);
+    }
+  }
+
+  throw new Error(errors.join(' | ') || 'Cetak nota gagal');
+}
+
 app.get('/health', (req, res) => {
   res.json({
     ok: true,
     protocol: 'https',
     displayName: PRINTER_CFG.displayName,
     shareName: PRINTER_CFG.shareName,
+    allowCopy: PRINTER_CFG.allowCopy === true,
+    hasLogo: loadLogoRaster().length > 0,
     port: PORT,
   });
 });
@@ -205,11 +264,10 @@ app.post('/print/raw', async (req, res) => {
 app.post('/print/nota', async (req, res) => {
   try {
     const data = req.body.data || req.body;
-    const buffer = buildNotaText(data, {
-      nmToko: data.nm_toko || PRINTER_CFG.nmToko,
-      alToko: data.al_toko || PRINTER_CFG.alToko,
-    });
-    const result = await printWithFallback(buffer);
+    if (!data || !(data.items && data.items.length)) {
+      return res.status(400).json({ success: false, error: 'Data nota kosong atau items tidak ada' });
+    }
+    const result = await printNotaBuffer(data);
     res.json({ success: true, ...result });
   } catch (e) {
     res.status(500).json({ success: false, error: e.message });
@@ -220,8 +278,9 @@ app.post('/print/html', async (req, res) => {
   try {
     const html = req.body.html || '';
     const text = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() + '\n\n\n';
+    const init = Buffer.from([0x1b, 0x40]);
     const cutPaper = Buffer.from([0x1d, 0x56, 0x30, 0x00]);
-    const buffer = Buffer.concat([Buffer.from(text, 'utf8'), cutPaper]);
+    const buffer = Buffer.concat([init, Buffer.from(text, 'latin1'), cutPaper]);
     const result = await printWithFallback(buffer);
     res.json({ success: true, ...result });
   } catch (e) {
@@ -239,6 +298,8 @@ https.createServer(credentials, app).listen(PORT, () => {
   console.log('Print bridge running on https://localhost:' + PORT);
   console.log('Printer display : ' + PRINTER_CFG.displayName);
   console.log('Printer share   : ' + PRINTER_CFG.shareName);
+  console.log('Metode copy     : ' + (PRINTER_CFG.allowCopy === true ? 'aktif' : 'nonaktif (WinSpool prioritas)'));
+  console.log('Logo nota       : ' + (loadLogoRaster().length > 0 ? 'ada' : 'tidak ada'));
   console.log('');
   console.log('PENTING: Buka https://localhost:' + PORT + '/health di browser');
   console.log('         lalu klik "Lanjutkan" / accept sertifikat (sekali saja).');

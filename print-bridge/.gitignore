@@ -3,3 +3,4 @@ logs/
 tools/nssm.exe
 ssl/
 RawPrinterHelper.dll
+RawPrinterHelper.v2.dll
