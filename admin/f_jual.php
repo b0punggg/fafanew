@@ -948,33 +948,36 @@
         });
       }    
       
-      // Flag untuk mencegah double execution - menggunakan window scope
       if (typeof window.cetaknotaExecuted === 'undefined') {
         window.cetaknotaExecuted = {};
       }
-      
+      if (typeof window.simpanbyrBusy === 'undefined') {
+        window.simpanbyrBusy = false;
+      }
+
+      function runCetaknotaFromScript(script) {
+        if (!script || script.indexOf('cetaknota') === -1) return;
+        var cetakMatch = script.match(/cetaknota\(['"]([^'"]+)['"],\s*['"]([^'"]*)['"]\)/);
+        if (cetakMatch && typeof cetaknota === 'function') {
+          cetaknota(cetakMatch[1], cetakMatch[2]);
+        }
+      }
+
       function cetaknota(dtc,kopi){
-        // Buat key unik berdasarkan parameter
         var currentKey = dtc + '|' + kopi;
-        
-        // Cek apakah fungsi sudah dieksekusi dengan parameter yang sama
         if (window.cetaknotaExecuted[currentKey]) {
           console.log('cetaknota already executed for this transaction, skipping...');
           return;
         }
-        
-        // Set flag
         window.cetaknotaExecuted[currentKey] = true;
-        
-        // Reset flag setelah 3 detik untuk memungkinkan eksekusi berikutnya
         setTimeout(function() {
           delete window.cetaknotaExecuted[currentKey];
-        }, 3000);
-        
+        }, 10000);
+
         $.ajax({
-          url: 'f_jual_cetnota.php', // File tujuan
-          type: 'POST', // Tentukan type nya POST atau GET
-          data: {dtc:dtc,kopi:kopi}, 
+          url: 'f_jual_cetnota.php',
+          type: 'POST',
+          data: {dtc:dtc,kopi:kopi},
           dataType: "json",
           beforeSend: function(e) {
             if(e && e.overrideMimeType) {
@@ -984,7 +987,6 @@
           success: function(response){
             var htmlContent = response.hasil || '';
             $("#viewcetnot").html(htmlContent);
-            // Eksekusi script cetak (innerHTML tidak menjalankan <script>)
             var scripts = [];
             htmlContent.replace(/<script[^>]*>([\s\S]*?)<\/script>/gi, function(match, scriptContent) {
               if (scriptContent && scriptContent.trim()) {
@@ -992,24 +994,28 @@
               }
               return '';
             });
-            scripts.forEach(function(script, idx) {
+            if (scripts.length > 0) {
               try {
-                console.log('🖨️ Executing print script #' + (idx + 1));
-                eval(script);
+                console.log('🖨️ Executing print script');
+                eval(scripts[0]);
               } catch (e) {
                 console.error('❌ Print script error:', e);
               }
-            });
+            }
           },
-          error: function (xhr, ajaxOptions, thrownError) { // Ketika terjadi error
-            alert(xhr.responseText); // munculkan alert
+          error: function (xhr) {
+            delete window.cetaknotaExecuted[currentKey];
+            alert(xhr.responseText);
           }
         });
       }
-      
+
       function simpanbyr(dtgl_jual,cno_fakjuals,ckd_pel_byr,ckd_bayar,nbyr_awal,ntot_belanja,nbayar,nkembali,ndisctot,ntdiscitem1,nvoucher,nongkir,cpil_tf,dtgl_jtnota,npil_cetak){
-        
-        // Ambil data member dan poin sebelum submit
+        if (window.simpanbyrBusy) {
+          console.log('simpanbyr sedang diproses, abaikan klik ganda');
+          return;
+        }
+        window.simpanbyrBusy = true;
         var kd_member_byr = document.getElementById('kd_member_byr') ? document.getElementById('kd_member_byr').value : '';
         var poin_earned_hidden = document.getElementById('poin_earned_hidden') ? document.getElementById('poin_earned_hidden').value : '0';
         var poin_redeem_hidden = document.getElementById('poin_redeem_hidden') ? document.getElementById('poin_redeem_hidden').value : '0';
@@ -1034,6 +1040,7 @@
             if (!response || !response.hasil) {
               console.error('❌ Invalid response:', response);
               alert('Error: Tidak ada response dari server. Silakan coba lagi.');
+              window.simpanbyrBusy = false;
               setTimeout(function() {
                 window.location.reload();
               }, 2000);
@@ -1050,6 +1057,7 @@
             if (!htmlContent || htmlContent.trim() === '') {
               console.error('❌ HTML content is empty!');
               alert('Error: Response kosong dari server.');
+              window.simpanbyrBusy = false;
               return;
             }
             var scripts = [];
@@ -1108,113 +1116,26 @@
             
             // Execute print scripts FIRST (before popup) to ensure printing happens
             if (hasPrintScript) {
-              console.log('🖨️ Print script detected, executing IMMEDIATELY...');
-              console.log('📋 Total scripts to process:', scripts.length);
-              
-              // Ensure cetaknota function is available
-              if (typeof cetaknota === 'undefined') {
-                console.error('❌ ERROR: cetaknota function is not defined!');
-                console.error('⚠️ Waiting for cetaknota function to be available...');
-                // Wait a bit and try again
-                setTimeout(function() {
-                  if (typeof cetaknota !== 'undefined') {
-                    console.log('✅ cetaknota function is now available, executing print...');
-                    scripts.forEach(function(script, idx) {
-                      try {
-                        if (script.indexOf('cetaknota') !== -1) {
-                          console.log('▶️ Executing cetaknota() script #' + (idx + 1) + '...');
-                          // Extract cetaknota call from script
-                          var cetakMatch = script.match(/cetaknota\(['"]([^'"]+)['"],\s*['"]([^'"]+)['"]\)/);
-                          if (cetakMatch && typeof cetaknota === 'function') {
-                            var dtc = cetakMatch[1];
-                            var kopi = cetakMatch[2];
-                            console.log('📋 Calling cetaknota directly with dtc:', dtc.substring(0, 50) + '...', 'kopi:', kopi);
-                            cetaknota(dtc, kopi);
-                            console.log('✅ cetaknota() called successfully');
-                          } else {
-                            eval(script);
-                          }
-                          console.log('✅ cetaknota() script executed successfully');
-                        }
-                      } catch(e) {
-                        console.error('❌ Print script error:', e);
-                        console.error('Error details:', e.message, e.stack);
-                      }
-                    });
-                  } else {
-                    console.error('❌ cetaknota function still not available after wait');
-                  }
-                }, 100);
-              } else {
-                console.log('✅ cetaknota function is available');
-                
-                // Execute print scripts first - use setTimeout to ensure DOM is ready
-                setTimeout(function() {
-                  scripts.forEach(function(script, idx) {
-                    try {
-                      if (script.indexOf('cetaknota') !== -1) {
-                        console.log('▶️ Executing cetaknota() script #' + (idx + 1) + '...');
-                        console.log('📝 Script preview:', script.substring(0, 150));
-                        // Extract cetaknota call from script
-                        var cetakMatch = script.match(/cetaknota\(['"]([^'"]+)['"],\s*['"]([^'"]+)['"]\)/);
-                        if (cetakMatch) {
-                          var dtc = cetakMatch[1];
-                          var kopi = cetakMatch[2];
-                          console.log('📋 Calling cetaknota with dtc:', dtc.substring(0, 50) + '...', 'kopi:', kopi);
-                          // Call cetaknota directly
-                          if (typeof cetaknota === 'function') {
-                            cetaknota(dtc, kopi);
-                            console.log('✅ cetaknota() called successfully');
-                          } else {
-                            console.error('❌ cetaknota is not a function');
-                            // Fallback: execute script as is
-                            eval(script);
-                          }
-                        } else {
-                          // Fallback: execute script as is
-                          eval(script);
-                        }
-                        console.log('✅ Print script executed successfully');
-                      }
-                    } catch(e) {
-                      console.error('❌ Print script error:', e);
-                      console.error('Script content:', script.substring(0, 200));
-                      console.error('Full error:', e.message, e.stack);
-                    }
-                  });
-                }, 100);
-              }
-              
-              // Execute other non-print scripts
               scripts.forEach(function(script) {
-                try {
-                  if (script.indexOf('cetaknota') === -1 && script.indexOf('kosongkan2') !== -1) {
-                    eval(script);
-                  }
-                } catch(e) {
-                  console.error('Script error:', e);
+                runCetaknotaFromScript(script);
+                if (script.indexOf('cetaknota') === -1 && script.indexOf('kosongkan2') !== -1) {
+                  try { eval(script); } catch(e) { console.error('Script error:', e); }
                 }
               });
-              
-              // Execute popup scripts after print is initiated
+
               setTimeout(function() {
                 popupScripts.forEach(function(script) {
                   try {
                     console.log('▶️ Executing popup script:', script.substring(0, 100));
                     eval(script);
-                    console.log('✅ Popup script executed');
                   } catch(e) {
                     console.error('❌ Popup script error:', e);
-                    console.error('Script content:', script);
                   }
                 });
-              }, 500);
-              
-              // Inject cleaned HTML
+              }, 300);
+
               var cleanHtml = htmlContent.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
               $("#viewsimpanbyr").html(cleanHtml);
-              
-              // NO AUTO-RELOAD - User requested to remove it
               console.log('✅ Print process initiated, no auto-reload');
             } else {
               // No print script - execute normally
@@ -1306,6 +1227,10 @@
                 window.location.reload();
               }, 1000);
             }
+            window.simpanbyrBusy = false;
+          },
+          complete: function() {
+            window.simpanbyrBusy = false;
           }
         });
       }
