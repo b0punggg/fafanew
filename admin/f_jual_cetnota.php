@@ -74,8 +74,6 @@
     unset($sqlmember,$datamember);
   }
   
-  mysqli_close($connect);
-  
   include_once 'thermal_printer.php';
 
   // CEK: localhost ATAU Windows PC kasir (bisa pakai domain lokal seperti tokofafa.dhe51.id)
@@ -135,44 +133,36 @@
       $script_content = '<script>console.log("⚠️ Thermal printing mungkin gagal, cek error log");</script>';
     }
     echo json_encode(array('hasil'=>$script_content));
+    mysqli_close($connect);
     exit; // Keluar langsung setelah print, jangan lanjut ke mode online
     
   } else {
-    // MODE ONLINE: Gunakan metode script lama yang terbukti bekerja
-    // Format dtc sesuai dengan script lama: no_fakjual;tgl_jual;kd_toko;nm_pel;alamat;tgltime;disctot;voucher;ongkir;kd_bayar;bayar;susuk;saldohut;tgl_jt
-    $dtc = implode(';', [
-        $no_fakjual, $tgl_jual, $kd_toko, $nm_pel, $alamat, 
-        $tgltime, $disctot, $voucher, $ongkir, $kd_bayar, 
-        $bayar, $susuk, $saldohut, $tgl_jt
-    ]);
-    
+    include_once 'nota_data.php';
+
+    $notaData = build_nota_data($connect, array(
+      'no_fakjual'  => $no_fakjual,
+      'tgl_jual'    => $tgl_jual,
+      'kd_toko'     => $kd_toko,
+      'nm_pel'      => $nm_pel,
+      'alamat'      => $alamat,
+      'tgltime'     => $tgltime,
+      'disctot'     => $disctot,
+      'voucher'     => $voucher,
+      'ongkir'      => $ongkir,
+      'kd_bayar'    => $kd_bayar,
+      'bayar'       => $bayar,
+      'susuk'       => $susuk,
+      'saldohut'    => $saldohut,
+      'jtempo'      => $tgl_jt,
+      'nm_toko'     => $nm_toko,
+      'al_toko'     => $al_toko,
+      'nm_member'   => $nm_member,
+      'poin_earned' => $poin_earned,
+      'poin_saldo'  => $poin_saldo,
+    ));
+
     header('Content-Type: application/json');
-    
-    // Gunakan metode script lama yang terbukti bekerja - kirim JSON data langsung ke print server
-    $script_content = '<script>
-fetch("get_nota.php?dts=' . addslashes($dtc) . '")
-.then(function(res) { return res.json(); })
-.then(function(data) {
-  console.log("✅ Parsed JSON:", data);
-  if (typeof printBridgeNota === "function") {
-    return printBridgeNota(data.data);
-  }
-  return fetch("http://localhost:3000/print/nota", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data.data)
-  }).then(function(res) {
-    if (!res.ok) throw new Error("Print bridge gagal");
-    return res.json();
-  }).then(function(result) {
-    console.log("✅ Response from print bridge:", result);
-  });
-})
-.catch(function(err) {
-  console.error("❌ Error cetak nota:", err);
-});
-</script>';
-    
-    echo json_encode(array('hasil'=>$script_content));
+    echo json_encode(array('notaData' => $notaData), JSON_UNESCAPED_UNICODE);
+    mysqli_close($connect);
   }
 ?>

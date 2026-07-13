@@ -25,7 +25,7 @@
     <script type="text/javascript" src="../assets/js/jquery.mask.min.js"></script> 
     <script type="text/javascript" src="../assets/js/bootstrap.min.js"></script>
     <script src="../assets/js/html5-qrcode.min.js"></script>
-    <script src="print_bridge_client.js?v=20260713"></script>
+    <script src="print_bridge_client.js?v=20260714"></script>
   </head>
   <style>
     body,h2,h3,h4,h5,h6 {font-family: "Helvetica", arial}
@@ -60,9 +60,35 @@
     input.hrf_arial {font-size:10pt;}
     input.hrf_res {font-size:9pt;}
   }
+  #pos-status-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 10024;
+    background: rgba(0, 0, 0, 0.35);
+    align-items: center;
+    justify-content: center;
+  }
+  #pos-status-box {
+    background: #fff;
+    border-radius: 8px;
+    padding: 18px 28px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+    font-size: 14pt;
+    font-weight: bold;
+    color: #333;
+    text-align: center;
+    min-width: 240px;
+  }
 </style>
 
   <body onkeydown="tekantombol()">
+    <div id="pos-status-overlay">
+      <div id="pos-status-box">
+        <i class="fa fa-spinner fa-spin"></i>
+        <span id="pos-status-text" style="margin-left:8px;">Memproses...</span>
+      </div>
+    </div>
     <div id="main" style="font-size: 10pt;background: linear-gradient(565deg, #FAFAD2 10%, white 80%)">
     <div class="loader1" style="z-index: 10023"><div class="loader2"><div class="loader3"></div></div></div>
 
@@ -958,6 +984,48 @@
         window.simpanbyrBusy = false;
       }
 
+      function showPosStatus(message) {
+        var overlay = document.getElementById('pos-status-overlay');
+        var text = document.getElementById('pos-status-text');
+        if (overlay && text) {
+          text.textContent = message || 'Memproses...';
+          overlay.style.display = 'flex';
+        }
+      }
+
+      function hidePosStatus() {
+        var overlay = document.getElementById('pos-status-overlay');
+        if (overlay) {
+          overlay.style.display = 'none';
+        }
+      }
+
+      function sendNotaToPrintBridge(notaData) {
+        showPosStatus('Mencetak nota...');
+        var printPromise;
+        if (typeof printBridgeNota === 'function') {
+          printPromise = printBridgeNota(notaData);
+        } else {
+          printPromise = fetch('http://localhost:3000/print/nota', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(notaData)
+          }).then(function(res) {
+            if (!res.ok) throw new Error('Print bridge gagal');
+            return res.json();
+          });
+        }
+        return Promise.resolve(printPromise).then(function(result) {
+          console.log('✅ Cetak selesai:', result);
+          hidePosStatus();
+          return result;
+        }).catch(function(err) {
+          console.error('❌ Error cetak nota:', err);
+          hidePosStatus();
+          throw err;
+        });
+      }
+
       function runCetaknotaFromScript(script) {
         if (!script || script.indexOf('cetaknota') === -1) return false;
         var cetakMatch = script.match(/cetaknota\(['"]([^'"]+)['"],\s*['"]([^'"]*)['"]\)/);
@@ -980,6 +1048,7 @@
         }
         window.cetaknotaInFlight = currentKey;
         window.cetaknotaExecuted[currentKey] = true;
+        showPosStatus('Menyiapkan nota...');
         setTimeout(function() {
           delete window.cetaknotaExecuted[currentKey];
         }, 10000);
@@ -995,6 +1064,14 @@
             }
           },
           success: function(response){
+            if (response && response.notaData) {
+              console.log('🖨️ Cetak langsung dari f_jual_cetnota.php (tanpa get_nota.php)');
+              sendNotaToPrintBridge(response.notaData).finally(function() {
+                window.cetaknotaInFlight = null;
+              });
+              return;
+            }
+
             var htmlContent = response.hasil || '';
             var scripts = [];
             htmlContent.replace(/<script[^>]*>([\s\S]*?)<\/script>/gi, function(match, scriptContent) {
@@ -1013,10 +1090,12 @@
                 console.error('❌ Print script error:', e);
               }
             }
+            hidePosStatus();
             window.cetaknotaInFlight = null;
           },
           error: function (xhr) {
             window.cetaknotaInFlight = null;
+            hidePosStatus();
             delete window.cetaknotaExecuted[currentKey];
             alert(xhr.responseText);
           }
@@ -1029,6 +1108,7 @@
           return;
         }
         window.simpanbyrBusy = true;
+        showPosStatus('Menyimpan transaksi...');
         var kd_member_byr = document.getElementById('kd_member_byr') ? document.getElementById('kd_member_byr').value : '';
         var poin_earned_hidden = document.getElementById('poin_earned_hidden') ? document.getElementById('poin_earned_hidden').value : '0';
         var poin_redeem_hidden = document.getElementById('poin_redeem_hidden') ? document.getElementById('poin_redeem_hidden').value : '0';
@@ -1053,6 +1133,7 @@
             if (!response || !response.hasil) {
               console.error('❌ Invalid response:', response);
               alert('Error: Tidak ada response dari server. Silakan coba lagi.');
+              hidePosStatus();
               window.simpanbyrBusy = false;
               setTimeout(function() {
                 window.location.reload();
@@ -1070,6 +1151,7 @@
             if (!htmlContent || htmlContent.trim() === '') {
               console.error('❌ HTML content is empty!');
               alert('Error: Response kosong dari server.');
+              hidePosStatus();
               window.simpanbyrBusy = false;
               return;
             }
@@ -1149,6 +1231,7 @@
                     console.error('❌ Popup script error:', e);
                   }
                 });
+                hidePosStatus();
               }, 300);
 
               var cleanHtml = htmlContent.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
@@ -1198,9 +1281,11 @@
                 // Reload setelah popup muncul (minimal 3 detik untuk memastikan popup terlihat)
                 setTimeout(function() {
                   console.log('🔄 Reloading page after popup...');
+                  hidePosStatus();
                   window.location.reload();
                 }, 3000);
               } else {
+                hidePosStatus();
                 console.log('⚠️ Error detected, skipping auto-reload to allow user to see error message');
               }
             }
@@ -1245,6 +1330,7 @@
               }, 1000);
             }
             window.simpanbyrBusy = false;
+            hidePosStatus();
           },
           complete: function() {
             window.simpanbyrBusy = false;
@@ -1252,7 +1338,7 @@
         });
       }
 
-      function cektokos2(){      
+      function cektokos2(){
         $.ajax({
           url: 'cektokos2.php', // File tujuan
           type: 'POST', // Tentukan type nya POST atau GET
