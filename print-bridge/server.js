@@ -108,12 +108,15 @@ function getPrinterTargets() {
       targets.push({ name, method, key });
     }
   }
-  add(PRINTER_CFG.displayName, 'winspool');
   add(PRINTER_CFG.shareName, 'copy');
+  add(PRINTER_CFG.displayName, 'copy');
+  (PRINTER_CFG.altNames || []).forEach((n) => {
+    add(n, 'copy');
+  });
+  add(PRINTER_CFG.displayName, 'winspool');
   add(PRINTER_CFG.displayName, 'print');
   (PRINTER_CFG.altNames || []).forEach((n) => {
     add(n, 'winspool');
-    add(n, 'copy');
   });
   return targets;
 }

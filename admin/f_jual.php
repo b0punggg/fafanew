@@ -6,6 +6,17 @@
    setlocale(LC_MONETARY , "ID");
    $kd_toko=$_SESSION['id_toko'];
    $id_user=$_SESSION['id_user'];
+   $connect_toko = opendtcek();
+   $pos_nm_toko = 'TOKOFAFA';
+   $pos_al_toko = '';
+   $sqltoko = mysqli_query($connect_toko, "SELECT nm_toko, al_toko FROM toko WHERE kd_toko='$kd_toko' LIMIT 1");
+   if ($sqltoko && mysqli_num_rows($sqltoko) > 0) {
+     $dttoko = mysqli_fetch_assoc($sqltoko);
+     $pos_nm_toko = $dttoko['nm_toko'];
+     $pos_al_toko = $dttoko['al_toko'];
+     mysqli_free_result($sqltoko);
+   }
+   mysqli_close($connect_toko);
   ?> 
   <head>
     <meta charset="UTF-8">
@@ -25,7 +36,16 @@
     <script type="text/javascript" src="../assets/js/jquery.mask.min.js"></script> 
     <script type="text/javascript" src="../assets/js/bootstrap.min.js"></script>
     <script src="../assets/js/html5-qrcode.min.js"></script>
-    <script src="print_bridge_client.js?v=20260714"></script>
+    <script src="print_bridge_client.js?v=20260715"></script>
+    <script>
+      window.POS_TOKO = {
+        kd_toko: <?=json_encode($kd_toko)?>,
+        nm_toko: <?=json_encode($pos_nm_toko)?>,
+        al_toko: <?=json_encode($pos_al_toko)?>
+      };
+      window.POS_CART_ITEMS = [];
+      window.posPrintAlreadyDone = false;
+    </script>
   </head>
   <style>
     body,h2,h3,h4,h5,h6 {font-family: "Helvetica", arial}
@@ -186,6 +206,9 @@
             });
             
             $("#viewbrgjual").html(response.hasil);
+            if (response.cartPrint && response.cartPrint.length) {
+              window.POS_CART_ITEMS = response.cartPrint;
+            }
             
             // Delay pengecekan duplicate IDs setelah content di-load
             setTimeout(function() {
@@ -983,6 +1006,98 @@
       if (typeof window.simpanbyrBusy === 'undefined') {
         window.simpanbyrBusy = false;
       }
+      if (typeof window.posPrintAlreadyDone === 'undefined') {
+        window.posPrintAlreadyDone = false;
+      }
+
+      function parseMoneyValue(val) {
+        if (val === null || val === undefined || val === '') return 0;
+        if (typeof val === 'number' && !isNaN(val)) return Math.round(val);
+        var s = String(val).replace(/\./g, '').replace(',', '.');
+        return Math.round(Number(s) || 0);
+      }
+
+      function formatTglId(iso) {
+        if (!iso) return '';
+        var p = String(iso).split('-');
+        if (p.length !== 3) return String(iso);
+        return p[2] + '-' + p[1] + '-' + p[0];
+      }
+
+      function formatTglTime(tgl_jual) {
+        var now = new Date();
+        var h = ('0' + now.getHours()).slice(-2);
+        var m = ('0' + now.getMinutes()).slice(-2);
+        var s = ('0' + now.getSeconds()).slice(-2);
+        return formatTglId(tgl_jual) + ' ' + h + ':' + m + ':' + s;
+      }
+
+      function shouldPrintOnSave(pil_cetak) {
+        var p = String(pil_cetak || '').toUpperCase();
+        return p === 'CETAK' || p === 'CETAK-CK' || p === 'CETAK-SM';
+      }
+
+      function buildNotaFromScreen(opts) {
+        opts = opts || {};
+        var items = window.POS_CART_ITEMS || [];
+        var belanja = 0;
+        items.forEach(function(item) {
+          belanja += Number(item.subtot) || 0;
+        });
+
+        var disctot = parseMoneyValue(document.getElementById('disctot') ? document.getElementById('disctot').value : 0);
+        var voucher = parseMoneyValue(document.getElementById('voucher') ? document.getElementById('voucher').value : 0);
+        var ongkir = parseMoneyValue(document.getElementById('ongkir') ? document.getElementById('ongkir').value : 0);
+        var bayar = parseMoneyValue(document.getElementById('bayar') ? document.getElementById('bayar').value : 0);
+        var susuk = parseMoneyValue(
+          document.getElementById('kembali') ? document.getElementById('kembali').value :
+          (document.getElementById('kembali1') ? document.getElementById('kembali1').value : 0)
+        );
+        var totBelanja = parseMoneyValue(document.getElementById('tot_belanja') ? document.getElementById('tot_belanja').value : belanja);
+        var kd_bayar = document.getElementById('kd_bayar2') ? document.getElementById('kd_bayar2').value : 'TUNAI';
+        var saldohut = kd_bayar === 'TUNAI' ? 0 : Math.max(0, totBelanja - bayar);
+        var nm_member = document.getElementById('nm_memberbayar') ? document.getElementById('nm_memberbayar').value : '';
+        var poinEarnedEl = document.getElementById('poin_earned_hidden');
+        var poinAvailEl = document.getElementById('poin_member_available');
+        var poinMemberEl = document.getElementById('poin_member');
+        var toko = window.POS_TOKO || {};
+
+        return {
+          no_fakjual: opts.no_fakjual || '',
+          tgl_jual: opts.tgl_jual || '',
+          nm_toko: toko.nm_toko || 'TOKOFAFA',
+          al_toko: toko.al_toko || '',
+          nm_pel: document.getElementById('nm_pelbayar') ? document.getElementById('nm_pelbayar').value : '',
+          alamat: '',
+          tgltime: formatTglTime(opts.tgl_jual || ''),
+          nm_member: nm_member,
+          poin_earned: poinEarnedEl ? parseFloat(poinEarnedEl.value || 0) : 0,
+          poin_saldo: poinAvailEl ? parseFloat(poinAvailEl.value || 0) : (poinMemberEl ? parseFloat(poinMemberEl.value || 0) : 0),
+          belanja: belanja,
+          total: totBelanja,
+          total_bayar: totBelanja,
+          disctot: disctot,
+          disctot_raw: disctot,
+          voucher: voucher,
+          voucher_raw: voucher,
+          ongkir: ongkir,
+          ongkir_raw: ongkir,
+          kd_bayar: kd_bayar,
+          bayar: bayar,
+          susuk: susuk,
+          saldohut: saldohut,
+          jtempo: formatTglId(document.getElementById('tgl_jtnotas') ? document.getElementById('tgl_jtnotas').value : ''),
+          items: items
+        };
+      }
+
+      function printNotaImmediate(notaData) {
+        var printKey = (notaData.no_fakjual || '') + '|' + (notaData.tgl_jual || '');
+        window.posPrintAlreadyDone = true;
+        window.cetaknotaExecuted[printKey + '|fast'] = true;
+        showPosStatus('Mencetak nota...');
+        return sendNotaToPrintBridge(notaData, { keepStatus: true });
+      }
 
       function showPosStatus(message) {
         var overlay = document.getElementById('pos-status-overlay');
@@ -1000,8 +1115,11 @@
         }
       }
 
-      function sendNotaToPrintBridge(notaData) {
-        showPosStatus('Mencetak nota...');
+      function sendNotaToPrintBridge(notaData, options) {
+        options = options || {};
+        if (!options.keepStatus) {
+          showPosStatus('Mencetak nota...');
+        }
         var printPromise;
         if (typeof printBridgeNota === 'function') {
           printPromise = printBridgeNota(notaData);
@@ -1017,11 +1135,15 @@
         }
         return Promise.resolve(printPromise).then(function(result) {
           console.log('✅ Cetak selesai:', result);
-          hidePosStatus();
+          if (!options.keepStatus) {
+            hidePosStatus();
+          }
           return result;
         }).catch(function(err) {
           console.error('❌ Error cetak nota:', err);
-          hidePosStatus();
+          if (!options.keepStatus) {
+            hidePosStatus();
+          }
           throw err;
         });
       }
@@ -1108,6 +1230,21 @@
           return;
         }
         window.simpanbyrBusy = true;
+        window.posPrintAlreadyDone = false;
+
+        if (shouldPrintOnSave(npil_cetak)) {
+          var fastNota = buildNotaFromScreen({
+            no_fakjual: cno_fakjuals,
+            tgl_jual: dtgl_jual
+          });
+          if (fastNota.items && fastNota.items.length > 0) {
+            printNotaImmediate(fastNota).catch(function(err) {
+              console.warn('Cetak cepat gagal, akan dicoba ulang dari server:', err);
+              window.posPrintAlreadyDone = false;
+            });
+          }
+        }
+
         showPosStatus('Menyimpan transaksi...');
         var kd_member_byr = document.getElementById('kd_member_byr') ? document.getElementById('kd_member_byr').value : '';
         var poin_earned_hidden = document.getElementById('poin_earned_hidden') ? document.getElementById('poin_earned_hidden').value : '0';
@@ -1211,16 +1348,20 @@
             
             // Execute print scripts FIRST (before popup) to ensure printing happens
             if (hasPrintScript) {
-              var printStarted = false;
-              scripts.forEach(function(script) {
-                if (!printStarted && script.indexOf('cetaknota') !== -1) {
-                  printStarted = runCetaknotaFromScript(script);
-                  return;
-                }
-                if (script.indexOf('cetaknota') === -1 && script.indexOf('kosongkan2') !== -1) {
-                  try { eval(script); } catch(e) { console.error('Script error:', e); }
-                }
-              });
+              if (window.posPrintAlreadyDone) {
+                console.log('⏭️ Cetak sudah dari layar, lewati cetaknota server');
+              } else {
+                var printStarted = false;
+                scripts.forEach(function(script) {
+                  if (!printStarted && script.indexOf('cetaknota') !== -1) {
+                    printStarted = runCetaknotaFromScript(script);
+                    return;
+                  }
+                  if (script.indexOf('cetaknota') === -1 && script.indexOf('kosongkan2') !== -1) {
+                    try { eval(script); } catch(e) { console.error('Script error:', e); }
+                  }
+                });
+              }
 
               setTimeout(function() {
                 popupScripts.forEach(function(script) {

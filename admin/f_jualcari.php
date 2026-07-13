@@ -93,6 +93,7 @@
       //*** Hitung grand total untuk list penjualan
       $disc1=0;$disc2=0;$jmlsub=0;$totlaba=0;$item=0;$bayar='';$ditem=0;$tdisc2=0;$discvo=0;
       $gtotawal=0;$dnota=0;$totdnota=0;$totvo=0;
+      $cart_print_items = array();
       $cek = mysqli_query($connect, "SELECT * FROM dum_jual WHERE dum_jual.no_fakjual='$no_fakjual' AND dum_jual.tgl_jual='$tgl_fakjual' AND dum_jual.kd_toko='$kd_toko'  order by no_urut ASC");
       while ($cari=mysqli_fetch_array($cek)) {
         // if($cari['ket']<>'RETUR BARANG'){
@@ -121,6 +122,16 @@
           $gtotawal = $gtotawal+($cari['hrg_jual']*$cari['qty_brg']); 
           $gtot     = $gtot+round($jmlsub,2);
           $bayar    = $cari['bayar'];
+          $nm_sat_print = ' ' . ucwords(strtolower(ceknmkem2($cari['kd_sat'], $connect)));
+          $cart_print_items[] = array(
+            'nmbrg'   => trim(ucwords(strtolower($cari['nm_brg']))),
+            'qty'     => round($cari['qty_brg'], 0),
+            'sat'     => $nm_sat_print,
+            'hrg'     => round($cari['hrg_jual'], 0),
+            'disc'    => round($cari['discrp'], 0),
+            'discpct' => round($cari['discitem'], 0),
+            'subtot'  => round($jmlsub, 0),
+          );
         // }
         $item=$item+1;
 
@@ -1259,5 +1270,8 @@
   
   $html = ob_get_contents(); 
   ob_end_clean();
-  echo json_encode(array('hasil'=>$html));
+  echo json_encode(array(
+    'hasil' => $html,
+    'cartPrint' => isset($cart_print_items) ? $cart_print_items : array(),
+  ), JSON_UNESCAPED_UNICODE);
 ?>
