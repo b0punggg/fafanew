@@ -25,7 +25,7 @@
     <script type="text/javascript" src="../assets/js/jquery.mask.min.js"></script> 
     <script type="text/javascript" src="../assets/js/bootstrap.min.js"></script>
     <script src="../assets/js/html5-qrcode.min.js"></script>
-    <script src="print_bridge_client.js"></script>
+    <script src="print_bridge_client.js?v=20260713"></script>
   </head>
   <style>
     body,h2,h3,h4,h5,h6 {font-family: "Helvetica", arial}
@@ -951,24 +951,34 @@
       if (typeof window.cetaknotaExecuted === 'undefined') {
         window.cetaknotaExecuted = {};
       }
+      if (typeof window.cetaknotaInFlight === 'undefined') {
+        window.cetaknotaInFlight = null;
+      }
       if (typeof window.simpanbyrBusy === 'undefined') {
         window.simpanbyrBusy = false;
       }
 
       function runCetaknotaFromScript(script) {
-        if (!script || script.indexOf('cetaknota') === -1) return;
+        if (!script || script.indexOf('cetaknota') === -1) return false;
         var cetakMatch = script.match(/cetaknota\(['"]([^'"]+)['"],\s*['"]([^'"]*)['"]\)/);
         if (cetakMatch && typeof cetaknota === 'function') {
           cetaknota(cetakMatch[1], cetakMatch[2]);
+          return true;
         }
+        return false;
       }
 
       function cetaknota(dtc,kopi){
         var currentKey = dtc + '|' + kopi;
+        if (window.cetaknotaInFlight === currentKey) {
+          console.log('cetaknota sedang diproses, abaikan panggilan ganda');
+          return;
+        }
         if (window.cetaknotaExecuted[currentKey]) {
           console.log('cetaknota already executed for this transaction, skipping...');
           return;
         }
+        window.cetaknotaInFlight = currentKey;
         window.cetaknotaExecuted[currentKey] = true;
         setTimeout(function() {
           delete window.cetaknotaExecuted[currentKey];
@@ -986,7 +996,6 @@
           },
           success: function(response){
             var htmlContent = response.hasil || '';
-            $("#viewcetnot").html(htmlContent);
             var scripts = [];
             htmlContent.replace(/<script[^>]*>([\s\S]*?)<\/script>/gi, function(match, scriptContent) {
               if (scriptContent && scriptContent.trim()) {
@@ -994,16 +1003,20 @@
               }
               return '';
             });
+            var cleanHtml = htmlContent.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
+            $("#viewcetnot").html(cleanHtml);
             if (scripts.length > 0) {
               try {
-                console.log('🖨️ Executing print script');
+                console.log('🖨️ Executing print script (once)');
                 eval(scripts[0]);
               } catch (e) {
                 console.error('❌ Print script error:', e);
               }
             }
+            window.cetaknotaInFlight = null;
           },
           error: function (xhr) {
+            window.cetaknotaInFlight = null;
             delete window.cetaknotaExecuted[currentKey];
             alert(xhr.responseText);
           }
@@ -1116,8 +1129,12 @@
             
             // Execute print scripts FIRST (before popup) to ensure printing happens
             if (hasPrintScript) {
+              var printStarted = false;
               scripts.forEach(function(script) {
-                runCetaknotaFromScript(script);
+                if (!printStarted && script.indexOf('cetaknota') !== -1) {
+                  printStarted = runCetaknotaFromScript(script);
+                  return;
+                }
                 if (script.indexOf('cetaknota') === -1 && script.indexOf('kosongkan2') !== -1) {
                   try { eval(script); } catch(e) { console.error('Script error:', e); }
                 }

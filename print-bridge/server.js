@@ -51,6 +51,21 @@ function loadSslCerts() {
 }
 
 const PRINTER_CFG = loadConfig();
+const recentNotaPrints = new Map();
+const NOTA_IDEMPOTENCY_MS = 10000;
+
+function getNotaPrintKey(data) {
+  if (!data) return "";
+  return String(data.no_fakjual || "") + "|" + String(data.tgl_jual || "");
+}
+
+function pruneRecentNotaPrints(now) {
+  recentNotaPrints.forEach(function (printedAt, key) {
+    if (now - printedAt > NOTA_IDEMPOTENCY_MS) {
+      recentNotaPrints.delete(key);
+    }
+  });
+}
 
 const app = express();
 app.use(cors());
@@ -226,6 +241,23 @@ app.post('/print/raw', async (req, res) => {
 app.post('/print/nota', async (req, res) => {
   try {
     const data = req.body.data || req.body;
+    const printKey = getNotaPrintKey(data);
+    const now = Date.now();
+
+    if (printKey && printKey !== "|") {
+      pruneRecentNotaPrints(now);
+      const lastPrintedAt = recentNotaPrints.get(printKey);
+      if (lastPrintedAt && now - lastPrintedAt < NOTA_IDEMPOTENCY_MS) {
+        return res.json({
+          success: true,
+          skipped: true,
+          reason: 'duplicate',
+          key: printKey,
+        });
+      }
+      recentNotaPrints.set(printKey, now);
+    }
+
     const buffer = buildNotaText(data);
     const result = await printWithFallback(buffer);
     res.json({ success: true, ...result });

@@ -5,6 +5,7 @@
 (function () {
   var lastPrintKey = "";
   var lastPrintAt = 0;
+  var printInFlight = false;
   var PRINT_DEBOUNCE_MS = 8000;
 
   function buildUrls(path) {
@@ -72,14 +73,36 @@
   window.printBridgeNota = function (notaData) {
     var key = makePrintKey(notaData);
     var now = Date.now();
+
+    if (printInFlight) {
+      console.log("⏭️ Cetak dilewati (sedang proses): " + key);
+      return Promise.resolve({ success: true, skipped: true, reason: "in_flight" });
+    }
     if (key && key === lastPrintKey && now - lastPrintAt < PRINT_DEBOUNCE_MS) {
       console.log("⏭️ Cetak dilewati (duplikat): " + key);
       return Promise.resolve({ success: true, skipped: true, reason: "duplicate" });
     }
+
+    printInFlight = true;
     if (key) {
       lastPrintKey = key;
       lastPrintAt = now;
     }
-    return window.printBridgePost("/print/nota", notaData);
+
+    return window
+      .printBridgePost("/print/nota", notaData)
+      .then(function (result) {
+        return result;
+      })
+      .catch(function (err) {
+        if (key) {
+          lastPrintKey = "";
+          lastPrintAt = 0;
+        }
+        throw err;
+      })
+      .finally(function () {
+        printInFlight = false;
+      });
   };
 })();
