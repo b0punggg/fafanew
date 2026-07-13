@@ -67,6 +67,18 @@ function loadLogoRaster() {
   return null;
 }
 
+function formatItemDisc(item) {
+  const discRp = parseAmount(item.disc != null ? item.disc : item.discrp);
+  const discPct = parseAmount(item.discpct != null ? item.discpct : item.discitem);
+  if (item.discshow != null && parseAmount(item.discshow) > 0) {
+    const shown = parseAmount(item.discshow);
+    return discRp > 0 ? formatNumber(shown) : shown;
+  }
+  if (discRp > 0) return formatNumber(discRp);
+  if (discPct > 0) return discPct;
+  return 0;
+}
+
 function buildNotaText(data) {
   // ESC/POS: init, buka laci, condensed on (sama seperti f_jualcetaknota.php)
   const escInit = Buffer.from([0x1b, 0x40]);
@@ -110,7 +122,7 @@ function buildNotaText(data) {
   lines.push(p() + "No." + spasiStr("", 5) + "Nama Barang");
   lines.push(
     p() + spasiStr("", 5) +
-    spasiStr("Jml", 10) + spasiStr("Disc%", 12) + spasiStr("Harga", 11) + spasiStr("SubTotal", 12)
+    spasiStr("Jml", 10) + spasiStr("Disc", 12) + spasiStr("Harga", 11) + spasiStr("SubTotal", 12)
   );
   lines.push(p() + "-----------------------------------------------");
 
@@ -118,7 +130,7 @@ function buildNotaText(data) {
   (data.items || []).forEach(function (item, idx) {
     const qty = parseAmount(item.qty);
     const hrg = parseAmount(item.hrg);
-    const discPct = parseAmount(item.discpct != null ? item.discpct : item.disc);
+    const discShow = formatItemDisc(item);
     const subtot = parseAmount(item.subtot);
     itemTotal += subtot;
 
@@ -127,7 +139,7 @@ function buildNotaText(data) {
       spasiStr("", 4 + DEF) +
       spasiNum(qty, 3) +
       spasiStr(item.sat || "", 5) +
-      spasiNum(discPct, 9) +
+      spasiNum(discShow, 9) +
       spasiStr("", 2) +
       spasiNum(formatNumber(hrg), 9) +
       spasiStr("", 2) +

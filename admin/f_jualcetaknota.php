@@ -5,6 +5,9 @@
   if (!function_exists('opendtcek')) {
     include_once 'config.php';
   }
+  if (!function_exists('calc_item_subtot_nota')) {
+    include_once 'nota_data.php';
+  }
   
   // Pastikan session sudah dimulai
   if (session_status() === PHP_SESSION_NONE) {
@@ -87,7 +90,7 @@
     mysqli_free_result($cek_member);
     unset($cek_member,$dt_member);
 
-    $sql=mysqli_query($connect,"SELECT *,sum(dum_jual.qty_brg) AS qty_brg FROM dum_jual LEFT JOIN kemas ON dum_jual.kd_sat=kemas.no_urut WHERE dum_jual.no_fakjual='$no_fakjual' AND dum_jual.tgl_jual='$tgl_jual' AND dum_jual.kd_toko='$kd_toko' GROUP BY dum_jual.kd_brg,dum_jual.kd_sat,dum_jual.discitem,dum_jual.hrg_jual ORDER BY dum_jual.no_urut ASC");
+    $sql=mysqli_query($connect,"SELECT *,sum(dum_jual.qty_brg) AS qty_brg FROM dum_jual LEFT JOIN kemas ON dum_jual.kd_sat=kemas.no_urut WHERE dum_jual.no_fakjual='$no_fakjual' AND dum_jual.tgl_jual='$tgl_jual' AND dum_jual.kd_toko='$kd_toko' GROUP BY dum_jual.kd_brg,dum_jual.kd_sat,dum_jual.discitem,dum_jual.discrp,dum_jual.hrg_jual ORDER BY dum_jual.no_urut ASC");
     if(mysqli_num_rows($sql)>=1){
       $no=0;$subtot=0;$total=0;$def=1;
       // $Text  = $superscript1;
@@ -113,25 +116,24 @@
       }
       $Text .= spasistr('',$def)."-----------------------------------------------\n";
       $Text .= spasistr('',$def)."No.".spasistr('',5)."Nama Barang\n";
-      $Text .= spasistr('',$def).spasistr('',5).spasistr("Jml",10).spasistr("Disc%",12).spasistr("Harga",11).spasistr("SubTotal",12)."\n";
+      $Text .= spasistr('',$def).spasistr('',5).spasistr("Jml",10).spasistr("Disc",12).spasistr("Harga",11).spasistr("SubTotal",12)."\n";
       $Text .= spasistr('',$def)."-----------------------------------------------\n"; 
 
       while($data=mysqli_fetch_assoc($sql)){
         $no++;
         $nm_sat=' '.$data['nm_sat1'];
         $hrg_jual=gantiti($data['hrg_jual']);
-
-        if ($data['discitem']>0){
-          $disc=$data['hrg_jual']*($data['discitem']/100);
-          $subtot=round(($data['hrg_jual']-$disc)*$data['qty_brg'],0);
-        }else{
-          $subtot=$data['hrg_jual']*$data['qty_brg'];
-        }
+        $discitem_pct = floatval($data['discitem']);
+        $discrp_val = floatval($data['discrp']);
+        $discvo_pct = floatval($data['discvo']);
+        $subtot = round(calc_item_subtot_nota($data['hrg_jual'], $data['qty_brg'], $discitem_pct, $discrp_val, $discvo_pct), 0);
+        $disc_show = format_item_disc_nota($discitem_pct, $discrp_val);
+        $disc_col = $discrp_val > 0 ? gantiti($disc_show) : $disc_show;
 
         $total=$total+$subtot; 
         $Text .= spasistr('',$def).spasinum($no,3).'.'.spasistr('',1).$data['nm_brg']."\n";
 
-        $Text .= spasistr('',4+$def).spasinum($data['qty_brg'],3).spasistr($nm_sat,5).spasinum($data['discitem'],9).spasistr('',2).spasinum(gantiti($data['hrg_jual']),9).spasistr('',2).spasinum(gantiti($subtot),12)."\n";
+        $Text .= spasistr('',4+$def).spasinum($data['qty_brg'],3).spasistr($nm_sat,5).spasinum($disc_col,9).spasistr('',2).spasinum(gantiti($data['hrg_jual']),9).spasistr('',2).spasinum(gantiti($subtot),12)."\n";
 
       }
       $Text .= spasistr('',$def)."-----------------------------------------------\n"; 

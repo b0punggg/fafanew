@@ -43,7 +43,8 @@
 
   $kd_brg     = mysqli_escape_string($conseek,$_POST['kd_brg']);
   $qty_brg    = $_POST['qty_brg'];
-  $discitem   = backnumdes($_POST['discitem']);
+  // Field form #discitem = diskon nominal Rp per item; kolom DB discrp (bukan discitem %)
+  $discrp     = backnumdes($_POST['discitem']);
   $kd_sat     = $_POST['kd_sat'];
   $kd_kat     = $_POST['kd_kat'];
   $no_urutjual= mysqli_escape_string($conseek,$_POST['no_urutjual']);
@@ -212,22 +213,22 @@
         //proses penjualan
         $disckov=$discnot;$x1=0;$x2=0;$jml_brg=0;$x3=0;
         $jml_brg=($qty_brg*$jum_kem)/$jum_kem;
-        if ($discitem==0 AND $discnot==0){
+        if ($discrp==0 AND $discnot==0){
           $laba=($hrg_jual-$rhrg_beli)*$jml_brg ;  
         }  
 
-        if ($discitem>0 AND $discnot==0){
-          $laba=(($hrg_jual-$discitem)-$rhrg_beli)*$jml_brg;  
+        if ($discrp>0 AND $discnot==0){
+          $laba=(($hrg_jual-$discrp)-$rhrg_beli)*$jml_brg;  
         }  
 
-        if ($discitem==0 AND $discnot>0){
+        if ($discrp==0 AND $discnot>0){
           $hrgdisc=$hrg_jual-($hrg_jual*($discnot/100));
           $laba=($hrgdisc-$rhrg_beli)*$jml_brg;  
         }
 
-        if ($discitem>0 AND $discnot>0){
+        if ($discrp>0 AND $discnot>0){
           $x1=$hrg_jual*($discnot/100);
-          $x2=$x1+$discitem;
+          $x2=$x1+$discrp;
           $hrgdisc=$hrg_jual-$x2;
           $laba=($hrgdisc-$rhrg_beli)*$jml_brg;  
         }
@@ -235,7 +236,7 @@
         if ($discvo>0){
           $x1=$hrg_jual*($discnot/100);
           $x2=$hrg_jual*($discvo/100);
-          $x3=$x1+$discitem+$x2;
+          $x3=$x1+$discrp+$x2;
           $hrgdisc=$hrg_jual-$x3;
           $laba=($hrgdisc-$rhrg_beli)*$jml_brg;  
         }
@@ -244,7 +245,7 @@
         }  
         $nm_brg=mysqli_real_escape_string($conseek,$nm_brg)." ".$ketjual;
         $consave=opendtcek();
-        $d=mysqli_query($consave,"INSERT INTO dum_jual VALUES('','$tgl_jual','$no_fakjual','$kd_toko','$hrg_jual','$rhrg_beli','$jml_brg','$disckov','$discitem','$laba','$kd_bayar','$kd_pel','$kd_brg','$kd_sat','$nm_brg','BELUM','','$tgl_jt','$id_user','$nm_user',false,'$ket','$discvo','','$id_bag','$tghi')");
+        $d=mysqli_query($consave,"INSERT INTO dum_jual VALUES('','$tgl_jual','$no_fakjual','$kd_toko','$hrg_jual','$rhrg_beli','$jml_brg','$disckov','$discnot','$laba','$kd_bayar','$kd_pel','$kd_brg','$kd_sat','$nm_brg','BELUM','','$tgl_jt','$id_user','$nm_user',false,'$ket','$discvo','$discrp','$id_bag','$tghi')");
         mysqli_close($consave);    
        //end transaksi $potong=0
       } else { 
@@ -356,29 +357,29 @@
                   $hrg_jual=0;
                 }
                 $disckov=$discnot;
-                if ($discitem==0 AND $discnot==0){
+                if ($discrp==0 AND $discnot==0){
                   $laba=($hrg_jual-$hrg_beli)*$jml_brg;  
                 }  
 
-                if ($discitem>0 AND $discnot==0){
-                  $laba=(($hrg_jual-$discitem)-$hrg_beli)*$jml_brg;  
+                if ($discrp>0 AND $discnot==0){
+                  $laba=(($hrg_jual-$discrp)-$hrg_beli)*$jml_brg;  
                 }  
 
-                if ($discitem==0 AND $discnot>0){
+                if ($discrp==0 AND $discnot>0){
                   $hrgdisc=$hrg_jual-($hrg_jual*($discnot/100));
                   $laba=($hrgdisc-$hrg_beli)*$jml_brg;  
                 }
 
-                if ($discitem>0 AND $discnot>0){
+                if ($discrp>0 AND $discnot>0){
                   $x1=$hrg_jual*($discnot/100);
-                  $x2=$x1+$discitem;
+                  $x2=$x1+$discrp;
                   $hrgdisc=$hrg_jual-$x2;
                   $laba=($hrgdisc-$hrg_beli)*$jml_brg;  
                 }  
                 if ($discvo>0){
                   $x1=$hrg_jual*($discnot/100);
                   $x2=$hrg_jual*($discvo/100);
-                  $x3=$x1+$discitem+$x2;
+                  $x3=$x1+$discrp+$x2;
                   $hrgdisc=$hrg_jual-$x3;
                   $laba=($hrgdisc-$rhrg_beli)*$jml_brg;  
                 }
@@ -396,7 +397,7 @@
               $stok=$stok-($jml_brg*$jum_kem);
               $consave=opendtcek(); 
               $d=mysqli_query($consave,"UPDATE beli_brg SET stok_jual='$stok_jual' WHERE no_urut='$no_urut'");
-              $d=mysqli_query($consave,"INSERT INTO dum_jual VALUES('','$tgl_jual','$no_fakjual','$kd_toko','$hrg_jual','$hrg_beli','$jml_brg','$disckov','$discitem','$laba','$kd_bayar','$kd_pel','$kd_brg','$kd_sat','$nm_brg','BELUM','$no_urut','$tgl_jt','$id_user','$nm_user',false,'$ket','$discvo','','$id_bag','$tghi')");
+              $d=mysqli_query($consave,"INSERT INTO dum_jual VALUES('','$tgl_jual','$no_fakjual','$kd_toko','$hrg_jual','$hrg_beli','$jml_brg','$disckov','$discnot','$laba','$kd_bayar','$kd_pel','$kd_brg','$kd_sat','$nm_brg','BELUM','$no_urut','$tgl_jt','$id_user','$nm_user',false,'$ket','$discvo','$discrp','$id_bag','$tghi')");
               mysqli_close($consave);
             }//qty>0
           }//while  
@@ -429,7 +430,7 @@
             document.getElementById("igt-txt2").focus();
           </script><?php
         }
-        unset($stok,$jml_brg_mas,$brg_klr_mas,$stok_jual,$no_urut,$no_urut_a,$tgl_jual,$no_fakjual,$kd_toko,$hrg_jual,$hrg_beli,$jml_brg,$disckov,$discitem,$laba,$kd_bayar,$kd_pel,$kd_brg,$kd_sat,$nm_brg,$tgl_jt,$id_user,$nm_user,$ket,$discvo); 
+        unset($stok,$jml_brg_mas,$brg_klr_mas,$stok_jual,$no_urut,$no_urut_a,$tgl_jual,$no_fakjual,$kd_toko,$hrg_jual,$hrg_beli,$jml_brg,$disckov,$discrp,$laba,$kd_bayar,$kd_pel,$kd_brg,$kd_sat,$nm_brg,$tgl_jt,$id_user,$nm_user,$ket,$discvo); 
       }    
   } else {
     //$_SESSION['warning']=2;

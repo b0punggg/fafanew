@@ -2,6 +2,43 @@
 /**
  * Bangun payload JSON nota thermal — dipakai get_nota.php dan f_jual_cetnota.php.
  */
+function calc_item_subtot_nota($hrg_jual, $qty, $discitem_pct, $discrp, $discvo_pct = 0) {
+  $discitem_pct = floatval($discitem_pct);
+  $discrp = floatval($discrp);
+  $discvo_pct = floatval($discvo_pct);
+  $disc1 = $discitem_pct / 100;
+  $discvo = $discvo_pct / 100;
+
+  if ($discitem_pct == 0 && $discrp == 0 && $discvo_pct == 0) {
+    return $hrg_jual * $qty;
+  }
+  if ($discitem_pct > 0 && $discrp == 0 && $discvo_pct == 0) {
+    return ($hrg_jual - ($hrg_jual * $disc1)) * $qty;
+  }
+  if ($discitem_pct == 0 && $discrp > 0 && $discvo_pct == 0) {
+    return ($hrg_jual - $discrp) * $qty;
+  }
+  if ($discitem_pct > 0 && $discrp > 0 && $discvo_pct == 0) {
+    return ($hrg_jual - (($hrg_jual * $disc1) + $discrp)) * $qty;
+  }
+  if ($discvo_pct > 0) {
+    return ($hrg_jual - (($hrg_jual * $disc1) + ($hrg_jual * $discvo) + $discrp)) * $qty;
+  }
+  return $hrg_jual * $qty;
+}
+
+function format_item_disc_nota($discitem_pct, $discrp) {
+  $discrp = round(floatval($discrp), 0);
+  $discitem_pct = round(floatval($discitem_pct), 0);
+  if ($discrp > 0) {
+    return $discrp;
+  }
+  if ($discitem_pct > 0) {
+    return $discitem_pct;
+  }
+  return 0;
+}
+
 function build_nota_data($connect, $params) {
   $no_fakjual = isset($params['no_fakjual']) ? $params['no_fakjual'] : '';
   $tgl_jual   = isset($params['tgl_jual']) ? $params['tgl_jual'] : '';
@@ -73,19 +110,13 @@ function build_nota_data($connect, $params) {
       $nm_sat = ' ' . ucwords(strtolower($data['nm_sat1']));
       $hrg_jual = round($data['hrg_jual'], 0);
       $discitem = isset($data['discitem']) ? round($data['discitem'], 0) : 0;
-
-      if ($data['discrp'] > 0) {
-        $subtot = ($data['hrg_jual'] - $data['discrp']) * $data['qty_brg'];
-      } else {
-        $subtot = $data['hrg_jual'] * $data['qty_brg'];
-      }
-
-      $qty_brg = round($data['qty_brg'], 0);
+      $discvo = isset($data['discvo']) ? round($data['discvo'], 0) : 0;
       $discrp = round($data['discrp'], 0);
-      $hrg_jual = round($data['hrg_jual'], 0);
-      $total = $total + round($subtot, 0);
+      $qty_brg = round($data['qty_brg'], 0);
+
+      $subtot = round(calc_item_subtot_nota($hrg_jual, $qty_brg, $discitem, $discrp, $discvo), 0);
+      $total = $total + $subtot;
       $total = round($total, 0);
-      $subtot = round($subtot, 0);
 
       $items[] = array(
         'nmbrg'   => trim(ucwords(strtolower($data['nm_brg']))),
@@ -94,6 +125,7 @@ function build_nota_data($connect, $params) {
         'hrg'     => $hrg_jual,
         'disc'    => $discrp,
         'discpct' => $discitem,
+        'discshow'=> format_item_disc_nota($discitem, $discrp),
         'subtot'  => $subtot,
       );
     }

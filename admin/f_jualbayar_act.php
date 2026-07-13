@@ -158,9 +158,24 @@ if($disctot==0 AND $disctotit==0){
   $ceksql=mysqli_query($conbayar,"SELECT * from dum_jual where no_fakjual='$no_fakjual' and tgl_jual='$tgl_jual' and kd_toko='$kd_toko'");
    while($datahit=mysqli_fetch_assoc($ceksql)){
      $no_urut=$datahit['no_urut'];
-     $laba=($datahit['hrg_jual']-$datahit['hrg_beli'])*$datahit['qty_brg'];
-     mysqli_query($conbayar,"UPDATE dum_jual set laba='$laba',discitem='0',discrp='0',discvo='0' WHERE no_urut='$no_urut'"); 
+     $discrp_val=floatval($datahit['discrp']);
+     $discitem_pct=floatval($datahit['discitem']);
+     $discvo_pct=floatval($datahit['discvo']);
+     $hrgnet=$datahit['hrg_jual'];
+     if ($discitem_pct>0) {
+       $hrgnet-=$datahit['hrg_jual']*($discitem_pct/100);
+     }
+     if ($discvo_pct>0) {
+       $hrgnet-=$datahit['hrg_jual']*($discvo_pct/100);
+     }
+     if ($discrp_val>0) {
+       $hrgnet-=$discrp_val;
+     }
+     $laba=($hrgnet-$datahit['hrg_beli'])*$datahit['qty_brg'];
+     $tot_discitem=$tot_discitem+(($datahit['hrg_jual']-$hrgnet)*$datahit['qty_brg']);
+     mysqli_query($conbayar,"UPDATE dum_jual set laba='$laba' WHERE no_urut='$no_urut'"); 
    }
+   $tot_discitem=round($tot_discitem,2);
    unset($datahit,$ceksql);
 }  
 
