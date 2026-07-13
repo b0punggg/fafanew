@@ -77,6 +77,9 @@ function buildNotaText(data) {
   lines.push("");
   lines.push(p() + "No.Struk " + spasiStr("", 5) + ":" + spasiStr(data.no_fakjual || "", 20));
   lines.push(p() + "Tanggal  " + spasiStr("", 5) + ":" + spasiStr(gantitgl(tglJual), 10));
+  if (data.nm_pel) {
+    lines.push(p() + "Pembeli  " + spasiStr("", 5) + ":" + spasiStr(data.nm_pel, 30));
+  }
 
   if (data.nm_member) {
     lines.push(p() + "Member   " + spasiStr("", 5) + ":" + spasiStr(data.nm_member, 30));
@@ -182,6 +185,7 @@ function buildNotaText(data) {
   }
 
   lines.push("");
+  lines.push(spasiCenter("Kosmetik, Hijab, Aksesoris", WIDTH + DEF));
   lines.push(spasiCenter("BARANG YG.SUDAH DIBELI TDK BISA DIKEMBALIKAN", 46 + DEF));
   lines.push(spasiCenter("*TERIMA KASIH*", WIDTH + DEF));
   lines.push("");

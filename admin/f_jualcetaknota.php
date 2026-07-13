@@ -96,7 +96,9 @@
       $Text .= spasicenter($al_toko,47+$def)."\n\n";
       $Text .= spasistr('',$def)."No.Struk ".spasistr('',5).":".spasistr($no_fakjual,20)."\n";
       $Text .= spasistr('',$def)."Tanggal  ".spasistr('',5).":".spasistr(gantitgl($tgl_jual),10)."\n";
-      //$Text .= spasistr('',$def)."Pembeli  ".spasistr('',5).":".spasistr($nm_pel,10)."\n";
+      if (!empty($nm_pel)) {
+        $Text .= spasistr('',$def)."Pembeli  ".spasistr('',5).":".spasistr($nm_pel,30)."\n";
+      }
       // Tampilkan data member jika ada
       if (!empty($kd_member) && !empty($nm_member)) {
         $Text .= spasistr('',$def)."Member   ".spasistr('',5).":".spasistr($nm_member,30)."\n";
@@ -173,6 +175,7 @@
       }
       ////$Text .= spasistr('',$def).$no.spasistr('',2)."item".spasistr('',1).spasistr('Pembayaran',11).$kd_bayar."\n\n";
       $Text .= "\n";
+      $Text .= spasicenter('Kosmetik, Hijab, Aksesoris',47+$def)."\n";
       $Text .= spasicenter('BARANG YG.SUDAH DIBELI TDK BISA DIKEMBALIKAN',46+$def)."\n";
       // $Text .= spasicenter('*TERIMA KASIH*',47+$def)."\n\n\n\n\n\n\n\n\n\n\n";
       $Text .= spasicenter('*TERIMA KASIH*',47+$def)."\n\n\n\n\n\n";
