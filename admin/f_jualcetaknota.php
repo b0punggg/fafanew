@@ -91,9 +91,13 @@
     if(mysqli_num_rows($sql)>=1){
       $no=0;$subtot=0;$total=0;$def=1;
       // $Text  = $superscript1;
-      $Text  = $open;  
-      $Text .= spasistr('',$def).spasicenter($nm_toko,47)."\n";
-      $Text .= spasicenter($al_toko,47+$def)."\n\n";
+      $Text  = $open;
+      $logoRasterPath = __DIR__ . '/img/logo-raster.bin';
+      if (file_exists($logoRasterPath)) {
+        $Text .= file_get_contents($logoRasterPath);
+        $Text .= chr(27) . 'a' . chr(0);
+      }
+      $Text .= "\n";
       $Text .= spasistr('',$def)."No.Struk ".spasistr('',5).":".spasistr($no_fakjual,20)."\n";
       $Text .= spasistr('',$def)."Tanggal  ".spasistr('',5).":".spasistr(gantitgl($tgl_jual),10)."\n";
       if (!empty($nm_pel)) {

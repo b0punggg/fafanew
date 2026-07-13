@@ -1,8 +1,12 @@
 /**
  * Layout struk thermal 80mm — selaras dengan f_jualcetaknota.php (lebar 47 karakter, condensed).
  */
+const fs = require("fs");
+const path = require("path");
+
 const WIDTH = 47;
 const DEF = 1;
+const LOGO_RASTER_PATH = path.join(__dirname, "assets", "logo-raster.bin");
 
 function spasiStr(str, pjg) {
   str = String(str != null ? str : "");
@@ -52,6 +56,17 @@ function parseAmount(val) {
   return Number(s) || 0;
 }
 
+function loadLogoRaster() {
+  try {
+    if (fs.existsSync(LOGO_RASTER_PATH)) {
+      return fs.readFileSync(LOGO_RASTER_PATH);
+    }
+  } catch (e) {
+    console.warn("Logo raster tidak dapat dibaca:", e.message);
+  }
+  return null;
+}
+
 function buildNotaText(data) {
   // ESC/POS: init, buka laci, condensed on (sama seperti f_jualcetaknota.php)
   const escInit = Buffer.from([0x1b, 0x40]);
@@ -65,15 +80,9 @@ function buildNotaText(data) {
     return spasiStr("", DEF);
   };
 
-  const nmToko = data.nm_toko || "TOKOFAFA";
-  const alToko = data.al_toko || "";
   const tglJual =
     data.tgl_jual || (data.tgltime ? String(data.tgltime).split(" ")[0] : "");
 
-  lines.push(p() + spasiCenter(nmToko, WIDTH));
-  if (alToko) {
-    lines.push(spasiCenter(alToko, WIDTH + DEF));
-  }
   lines.push("");
   lines.push(p() + "No.Struk " + spasiStr("", 5) + ":" + spasiStr(data.no_fakjual || "", 20));
   lines.push(p() + "Tanggal  " + spasiStr("", 5) + ":" + spasiStr(gantitgl(tglJual), 10));
@@ -195,14 +204,16 @@ function buildNotaText(data) {
   lines.push("");
 
   const textBody = lines.join("\n") + "\n\n\n\n\n\n";
-  return Buffer.concat([
-    escInit,
-    openDrawer,
-    condensedOn,
-    Buffer.from(textBody, "binary"),
-    condensedOff,
-    cutPaper,
-  ]);
+  const logoRaster = loadLogoRaster();
+  const centerOff = Buffer.from([0x1b, 0x61, 0x00]);
+  const parts = [escInit, openDrawer];
+
+  if (logoRaster) {
+    parts.push(logoRaster, centerOff);
+  }
+
+  parts.push(condensedOn, Buffer.from(textBody, "binary"), condensedOff, cutPaper);
+  return Buffer.concat(parts);
 }
 
 module.exports = { buildNotaText, formatNumber, spasiCenter };
