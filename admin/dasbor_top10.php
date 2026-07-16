@@ -71,58 +71,34 @@ include 'config.php';
 $concet=opendtcek(); 
 $cbln=date('m',strtotime($_SESSION['tgl_set']));
 $cthn=date('Y',strtotime($_SESSION['tgl_set']));
+$ctgl=isset($_SESSION['tgl_set']) ? $_SESSION['tgl_set'] : date('Y-m-d');
 
 $kd_toko=$_SESSION['id_toko'];     
 
 // Ambil parameter POST dengan nilai default untuk mencegah undefined index
+$periode    = isset($_POST['periode']) ? $_POST['periode'] : 'bulan';
+if (!in_array($periode, array('hari','minggu','bulan'), true)) {
+  $periode = 'bulan';
+}
 $pilihbulan = isset($_POST['pilihbulan']) ? $_POST['pilihbulan'] : $cbln;
 $ctkpil     = isset($_POST['ctkpil']) ? $_POST['ctkpil'] : '0';
 $pilihst    = isset($_POST['pilihst']) ? $_POST['pilihst'] : '';
 $endyear    = isset($_POST['pilihtahun']) ? $_POST['pilihtahun'] : $cthn;
 $endbln     = $pilihbulan;
+$pilihtgl   = isset($_POST['pilihtgl']) && $_POST['pilihtgl'] !== '' ? $_POST['pilihtgl'] : $ctgl;
 
-if($pilihbulan=='1'){
-    $ktbln  = 'Januari';  
-}
-if($pilihbulan=='2'){
-    $ktbln  = 'Februari';  
-}
-if($pilihbulan=='3'){
-    $ktbln  = 'Maret';  
-}
-if($pilihbulan=='4'){
-    $ktbln  = 'April';  
-}
-if($pilihbulan=='5'){
-    $ktbln  = 'Mei';  
-}
-if($pilihbulan=='6'){
-    $ktbln  = 'Juni';  
-}
-if($pilihbulan=='7'){
-    $ktbln  = 'Juli';  
-}
-if($pilihbulan=='8'){
-    $ktbln  = 'Agustus';  
-}
-if($pilihbulan=='9'){
-    $ktbln  = 'September';  
-}
-if($pilihbulan=='10'){
-    $ktbln  = 'Oktober';  
-}
-if($pilihbulan=='11'){
-    $ktbln  = 'Nopember';  
-} 
-if($pilihbulan=='12'){
-    $ktbln  = 'Desember';  
-}
+$namabulan = array(
+  '1'=>'Januari','2'=>'Februari','3'=>'Maret','4'=>'April','5'=>'Mei','6'=>'Juni',
+  '7'=>'Juli','8'=>'Agustus','9'=>'September','10'=>'Oktober','11'=>'Nopember','12'=>'Desember'
+);
+$ktbln = isset($namabulan[(string)(int)$pilihbulan]) ? $namabulan[(string)(int)$pilihbulan] : $namabulan[(string)(int)$cbln];
+
 if($ctkpil=='0'){
    $pil=''; 
    $nmpil='(SEMUA BAGIAN)';
 }else{
-   $pil=' AND dum_jual.id_bag='.$ctkpil; 
-   $ss=$ctkpil;
+   $pil=' AND dum_jual.id_bag='.(int)$ctkpil; 
+   $ss=(int)$ctkpil;
    $dd=mysqli_query($concet,"SELECT nm_bag FROM bag_brg WHERE no_urut='$ss'");
    $qq=mysqli_fetch_assoc($dd);
    $nmpil='('.$qq['nm_bag'].')';
@@ -135,6 +111,20 @@ if($pilihst === '' || $pilihst === null){
 }else{
   $pil_st = (int)$pilihst;
 }
+
+if ($periode == 'hari') {
+  $where_periode = "dum_jual.tgl_jual='$pilihtgl'";
+  $judul_periode = 'HARI '.strtoupper(gantitgl($pilihtgl));
+} elseif ($periode == 'minggu') {
+  $where_periode = "YEARWEEK(dum_jual.tgl_jual,1)=YEARWEEK('$pilihtgl',1)";
+  $senin = date('Y-m-d', strtotime('monday this week', strtotime($pilihtgl)));
+  $minggu = date('Y-m-d', strtotime('sunday this week', strtotime($pilihtgl)));
+  $judul_periode = 'MINGGU '.strtoupper(gantitgl($senin)).' S/D '.strtoupper(gantitgl($minggu));
+} else {
+  $where_periode = "MONTH(dum_jual.tgl_jual)='$endbln' AND YEAR(dum_jual.tgl_jual)='$endyear'";
+  $judul_periode = 'BULAN '.strtoupper($ktbln).'  TAHUN '.$endyear;
+}
+
 $cq=mysqli_query($concet,"SELECT * FROM toko WHERE kd_toko='$kd_toko'");
 $dtt=mysqli_fetch_assoc($cq);
 $nm_toko=$dtt['nm_toko'];  
@@ -143,7 +133,7 @@ mysqli_free_result($cq);unset($dtt);
 <body class="F4">      
   <section class="sheet padding-10mm">  
     <div style="page-break-before: always;">
-      <h5 style="text-align: center;margin-bottom:5px ">BEST SELLER TOKO FAFA <?='BULAN '.strtoupper($ktbln).'  TAHUN '.$endyear.' '.$nmpil ?></h5>
+      <h5 style="text-align: center;margin-bottom:5px ">BEST SELLER TOKO FAFA <?=$judul_periode.' '.$nmpil ?></h5>
       <table cellspacing="0" style="width: 100%; border: solid 1px black; text-align: center; font-size: 8pt;">
         <thead >
           <tr>
@@ -157,7 +147,7 @@ mysqli_free_result($cq);unset($dtt);
         </thead>   
         <?php 
         $cek=mysqli_query($concet,"SELECT dum_jual.kd_brg,dum_jual.nm_brg,count(nm_brg) as jmlbrg FROM dum_jual 
-        WHERE month(dum_jual.tgl_jual)='$endbln' AND year(dum_jual.tgl_jual)='$endyear' AND INSTR(dum_jual.nm_brg,'JASA')=0 $pil AND kd_toko='$kd_toko'
+        WHERE $where_periode AND INSTR(dum_jual.nm_brg,'JASA')=0 $pil AND kd_toko='$kd_toko'
         GROUP BY dum_jual.nm_brg ORDER BY COUNT(*) DESC ");
         $a=0;
         while($data=mysqli_fetch_array($cek)){

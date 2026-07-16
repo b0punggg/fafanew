@@ -1,12 +1,25 @@
-<link rel="shortcut icon" href="img/keranjang.png">
+<?php
+set_time_limit(0);
+ini_set('max_execution_time', '0');
+ini_set('memory_limit', '512M');
+include 'starting.php';
+?>
 <script src="../assets/js/chart.min.js"></script>
 <script src="../assets/js/utils.js"></script>
-<div class="loader1"><div class="loader2"><div class="loader3"></div></div></div>
+<div id="dasbor-loader" class="dasbor-loader-overlay" style="z-index:10023;position:fixed;inset:0;background:rgba(255,255,255,0.92);display:flex;align-items:center;justify-content:center;">
+  <div class="loader1" style="position:relative;left:auto;top:auto;"><div class="loader2"><div class="loader3"></div></div></div>
+</div>
 <style>
   option{color:dodgerblue;}
-</style> 
+</style>
 
 <script>
+  function dasborHideLoader() {
+    var el = document.getElementById('dasbor-loader');
+    if (el) {
+      el.style.display = 'none';
+    }
+  }
   function caristok0 (page_number, search){      
     $.ajax({
       url: 'dasbor_stok0.php', // File tujuan
@@ -50,7 +63,7 @@
   }
 </script>
 
-<?php include 'starting.php'; 
+<?php
 $connect=opendtcek();
 $kd_toko=$_SESSION['id_toko'];
 $oto=$_SESSION['kodepemakai'];
@@ -69,15 +82,17 @@ while($data=mysqli_fetch_assoc($cek)){
   $x++;
   $disc1=$data['disc1']/100;
   $disc2=$data['disc2'];
+  $hrg_asal = 0;
   //konversi satuan terkecil
-  if($data['kd_sat']==$data['kd_kem3']){
+  if($data['kd_sat']==$data['kd_kem3'] && floatval($data['jum_kem3']) > 0){
     $hrg_asal=$data['hrg_beli']/$data['jum_kem3'];
-  }
-  if($data['kd_sat']==$data['kd_kem2']){
+  } elseif($data['kd_sat']==$data['kd_kem2'] && floatval($data['jum_kem2']) > 0){
     $hrg_asal=$data['hrg_beli']/$data['jum_kem2'];
-  }
-  if($data['kd_sat']==$data['kd_kem1']){
+  } elseif($data['kd_sat']==$data['kd_kem1'] && floatval($data['jum_kem1']) > 0){
     $hrg_asal=$data['hrg_beli']/$data['jum_kem1'];
+  }
+  if ($hrg_asal <= 0) {
+    continue;
   }
   // ------------------------  
 
@@ -215,6 +230,9 @@ while($edi=mysqli_fetch_assoc($de)){
 function hitung_ol($kdsat_o,$kdbrg_o,$disc1_o,$disc2_o,$ppn_o,$hrg_o,$hub_o){
   $jumbrg = $disc1=$disc2=$hrg=0;
   $jumbrg = konjumbrg2($kdsat_o,$kdbrg_o,$hub_o);
+  if ($jumbrg <= 0) {
+    return 0;
+  }
   $hrg    = $hrg_o/$jumbrg ;
   if($disc1_o>0){
     $disc1  = ($hrg*$disc1_o)/100;
@@ -272,29 +290,29 @@ $jual=0;$laba=0;$profit=0;$disc=0;$jumlah=0;$ongkir=0;$laba_t_bln=0;
 $cek=mysqli_query($connect,"SELECT SUM(tot_jual) AS totjual,SUM(tot_disc) AS totdisc FROM mas_jual 
   WHERE mas_jual.kd_toko='$kd_toko' AND MONTH(tgl_jual)='$endbln' AND YEAR(tgl_jual)='$endyear' AND kd_bayar='TEMPO'"); 
 $data      = mysqli_fetch_assoc($cek);
-$jualtempo = $data['totjual']-$data['totdisc'];
+$jualtempo = ($data && $data['totjual'] !== null) ? floatval($data['totjual'])-floatval($data['totdisc']) : 0;
 unset($data,$cek);
 
 //jual tunai
 $cek=mysqli_query($connect,"SELECT SUM(tot_jual) AS totjual,SUM(tot_disc) AS totdisc FROM mas_jual 
   WHERE mas_jual.kd_toko='$kd_toko' AND MONTH(tgl_jual)='$endbln' AND YEAR(tgl_jual)='$endyear' AND kd_bayar='TUNAI'"); 
 $data      = mysqli_fetch_assoc($cek);
-$jualcash  = $data['totjual']-$data['totdisc'];
+$jualcash  = ($data && $data['totjual'] !== null) ? floatval($data['totjual'])-floatval($data['totdisc']) : 0;
 unset($data,$cek);
 
 //laba + ongkir
 $cek=mysqli_query($connect,"SELECT SUM(tot_laba) AS totlaba,SUM(ongkir) AS totongkir FROM mas_jual 
   WHERE mas_jual.kd_toko='$kd_toko' AND MONTH(tgl_jual)='$endbln' AND YEAR(tgl_jual)='$endyear'"); 
 $data      = mysqli_fetch_assoc($cek);
-$laba      = $data['totlaba'];
-$ongkir    = $data['totongkir'];
+$laba      = ($data && $data['totlaba'] !== null) ? floatval($data['totlaba']) : 0;
+$ongkir    = ($data && $data['totongkir'] !== null) ? floatval($data['totongkir']) : 0;
 unset($data,$cek);
 
 // piutang pelanggan bulan ini
 $hut_pel=0;
 $cek=mysqli_query($connect,"SELECT SUM(saldo_hutang) AS hut_pel FROM mas_jual where kd_toko='$kd_toko' AND ket_bayar='BELUM' ");
 $data=mysqli_fetch_assoc($cek);
-$hut_pel=$data['hut_pel'];
+$hut_pel=($data && $data['hut_pel'] !== null) ? floatval($data['hut_pel']) : 0;
 unset($cek,$data);
 
 //hutang supplier
@@ -352,10 +370,20 @@ unset($dret,$sqlret);
 
 ?>
 <script>
-  $(document).ready(function(){
-    $(".loader1").fadeOut();
-  })
-</script>     
+  function dasborInitLoaderHide() {
+    if (typeof jQuery !== 'undefined') {
+      jQuery('#dasbor-loader').fadeOut(200, dasborHideLoader);
+    } else {
+      dasborHideLoader();
+    }
+  }
+  if (typeof jQuery !== 'undefined') {
+    jQuery(document).ready(dasborInitLoaderHide);
+  } else {
+    document.addEventListener('DOMContentLoaded', dasborHideLoader);
+  }
+  window.addEventListener('load', dasborHideLoader);
+</script>
 
 <!-- Header -->
 <div class="w3-padding-small w3-margin-bottom" style="background: linear-gradient(165deg, magenta 0%, yellow 36%, white 80%);z-index: 1;margin-top: -7px ">
@@ -561,40 +589,48 @@ unset($dret,$sqlret);
   <div class="w3-panel">
     <div class="w3-row-padding" style="margin:0 -16px">
       <div class="w3-col s12 m12 l6 w3-margin-bottom" >
-        <div class="input-group">
-          <h5><i class="fa fa-star" style="color: orange"></i><b> Top 10 Best Seller </b></h5> &nbsp; <span><button id="btn-top10" class="btn yz-theme-d1 w3-border-black w3-left" style="margin-top:-5px"><i class="fa fa-caret-down"></i></button></span>
+        <div class="input-group" style="display:flex;flex-wrap:wrap;align-items:center;gap:8px">
+          <h5 style="margin:0"><i class="fa fa-star" style="color: orange"></i><b> Top 10 Best Seller </b></h5>
+          <select id="periode-bestseller" class="form-control" style="width:auto;min-width:120px;display:inline-block">
+            <option value="hari">Per Hari</option>
+            <option value="minggu">Per Minggu</option>
+            <option value="bulan" selected>Per Bulan</option>
+          </select>
+          <span><button id="btn-top10" type="button" class="btn yz-theme-d1 w3-border-black" style="margin-top:0"><i class="fa fa-caret-down"></i></button></span>
         </div>
-        <?php 
-        //TOP FIVE SERING LAKU
-        $btop=date('m');
-        $cek=mysqli_query($connect,"SELECT dum_jual.kd_brg,dum_jual.nm_brg,count(nm_brg) as jmlbrg FROM dum_jual 
-          WHERE month(dum_jual.tgl_jual)='$endbln' AND year(dum_jual.tgl_jual)='$endyear' AND kd_toko='$kd_toko'
-          GROUP BY dum_jual.nm_brg ORDER BY COUNT(*) DESC LIMIT 10");
-         ?> 
         <div class="w3-row">
           <div class="w3-col l6 s1 m6">
             &nbsp;
           </div>
           <div class="w3-col l6 s11 m6">
             <div id="tabtop10" class="w3-container w3-card-4"
-              style="display:none;position:absolute;border:1px solid white;border-radius:7px; background-color:rgba(0, 0, 0, 0.7)">
+              style="display:none;position:absolute;border:1px solid white;border-radius:7px; background-color:rgba(0, 0, 0, 0.7);z-index:50">
               <form action="dasbor_top10.php" method="post" target="blank">
-                <select name="pilihbulan" id="pilihbulan" class="form-control w3-margin-top w3-margin-bottom w3-border-blue" style="background-color: transparent;color:white" >
-                  <option value="1">JANUARI</option>
-                  <option value="2">FEBRUARI</option>
-                  <option value="3">MARET</option>
-                  <option value="4">APRIL</option>
-                  <option value="5">MEI</option>
-                  <option value="6">JUNI</option>
-                  <option value="7">JULI</option>
-                  <option value="8">AGUSTUS</option>
-                  <option value="9">SEPTEMBER</option>
-                  <option value="10">OKTOBER</option>
-                  <option value="11">NOPEMBER</option>
-                  <option value="12">DESEMBER</option>
+                <select name="periode" id="ctkperiode" class="form-control w3-margin-top w3-margin-bottom w3-border-blue" style="background-color: transparent;color:white">
+                  <option value="hari">PER HARI</option>
+                  <option value="minggu">PER MINGGU</option>
+                  <option value="bulan" selected>PER BULAN</option>
                 </select>
-             
-                <input id="pilihtahun" name="pilihtahun" class="w3-margin-bottom w3-text-white w3-border-blue form-control" type="number" min="2023" value="2023" style="background-color:transparent;">
+
+                <input id="pilihtgl" name="pilihtgl" class="w3-margin-bottom w3-text-white w3-border-blue form-control" type="date" value="<?=$_SESSION['tgl_set']?>" style="background-color:transparent;display:none">
+
+                <div id="wrap-bulan-tahun">
+                  <select name="pilihbulan" id="pilihbulan" class="form-control w3-margin-top w3-margin-bottom w3-border-blue" style="background-color: transparent;color:white" >
+                    <option value="1">JANUARI</option>
+                    <option value="2">FEBRUARI</option>
+                    <option value="3">MARET</option>
+                    <option value="4">APRIL</option>
+                    <option value="5">MEI</option>
+                    <option value="6">JUNI</option>
+                    <option value="7">JULI</option>
+                    <option value="8">AGUSTUS</option>
+                    <option value="9">SEPTEMBER</option>
+                    <option value="10">OKTOBER</option>
+                    <option value="11">NOPEMBER</option>
+                    <option value="12">DESEMBER</option>
+                  </select>
+                  <input id="pilihtahun" name="pilihtahun" class="w3-margin-bottom w3-text-white w3-border-blue form-control" type="number" min="2023" value="2023" style="background-color:transparent;">
+                </div>
 
                 <select name="ctkpil" id="ctkpil" class="form-control w3-margin-top w3-margin-bottom w3-border-blue" style="background-color: transparent;color:white">
                   <?php $nctk=0; $ds=mysqli_query($connect,"SELECT * FROM bag_brg ORDER BY no_urut");
@@ -615,64 +651,62 @@ unset($dret,$sqlret);
                 <button class="btn btn-md w3-border-white w3-margin-bottom form-control w3-hover" style="background-color:transparent;color:yellow" type="submit" onclick="document.getElementById('tabtop10').style.display='none'"><i class="fa fa-print"></i>&ensp;Cetak</button>
 
               </form>
-              <!-- <script type="text/javascript">
-                $(document).ready(function() {
-                  $('#form-input').submit(function() {
-                    $.ajax({
-                        type: 'POST',
-                        url: $(this).attr('action'),
-                        data: $(this).serialize(),
-                        success: function(data) {
-                            $('#viewcek').html(data);
-                        }
-                    })
-                    return false;
-                  });
-                })
-              </script>  -->
             </div>          
           </div>
         </div>
         <script>
           document.getElementById("pilihbulan").value=<?=date('m',strtotime($_SESSION['tgl_set']))?>;
           document.getElementById("pilihtahun").value=<?=date('Y',strtotime($_SESSION['tgl_set']))?>;
+
+          function toggleCtkPeriode() {
+            var p = document.getElementById("ctkperiode").value;
+            var wrapBln = document.getElementById("wrap-bulan-tahun");
+            var tgl = document.getElementById("pilihtgl");
+            if (p === "bulan") {
+              wrapBln.style.display = "block";
+              tgl.style.display = "none";
+            } else {
+              wrapBln.style.display = "none";
+              tgl.style.display = "block";
+            }
+          }
+
+          function loadBestSeller(periode) {
+            $.ajax({
+              url: "dasbor_bestseller.php",
+              type: "POST",
+              data: { periode: periode },
+              beforeSend: function(e) {
+                if (e && e.overrideMimeType) {
+                  e.overrideMimeType("text/html;charset=UTF-8");
+                }
+                $("#view-bestseller").html('<div class="w3-padding">Memuat...</div>');
+              },
+              success: function(html) {
+                $("#view-bestseller").html(html);
+              },
+              error: function(xhr) {
+                $("#view-bestseller").html('<div class="w3-padding text-danger">Gagal memuat best seller</div>');
+              }
+            });
+          }
+
           $(document).ready(function(){
             $("#btn-top10").click(function(){
               $("#tabtop10").slideToggle("fast");
             });
+            $("#ctkperiode").on("change", toggleCtkPeriode);
+            toggleCtkPeriode();
+            $("#periode-bestseller").on("change", function(){
+              var p = $(this).val();
+              document.getElementById("ctkperiode").value = p;
+              toggleCtkPeriode();
+              loadBestSeller(p);
+            });
+            loadBestSeller("bulan");
           });      
-        </script>  
-        <table class="w3-table w3-striped w3-white hrf_arial" style="font-size: 11pt">
-          <tr class="w3-border yz-theme-l3" style="font-size: 11pt">
-            <!-- <td style="text-align: center">Kode Barang</td> -->
-            <td style="text-align: center">Nama Barang</td>
-            <td style="text-align: center">Jml</td>
-            <td style="text-align: center">Stok</td>
-            <td style="text-align: center">Rank</td>
-          </tr>
-          <?php $a=0; 
-            while ($data=mysqli_fetch_assoc($cek)){
-             $kdbrg=$data['kd_brg'];
-             $a++; $stok=0;
-             $c=mysqli_query($connect,"SELECT sum(stok_jual) as jmls FROM beli_brg WHERE kd_brg='$kdbrg'");
-             $d=mysqli_fetch_assoc($c);
-             $stok=round($d['jmls'],0);
-             
-             $ex=explode(";",carisatkecil2($kdbrg,$connect));
-             $sat=strtolower(ceknmkem2($ex[0],$connect));
-             unset($c,$d,$ex);
-            ?>
-            <tr style="font-size: 10pt">
-              <!-- <td><?=$data['kd_brg']?></td> -->
-              <td><?=$data['nm_brg']?></td>
-              <td style="text-align:right"><?=$data['jmlbrg']?></td>
-              <td style="text-align:right"><?=$stok.' '.$sat?></td>
-              <td style="text-align: center"><i class="fa fa-star" style="color: orange"></i> <?=$a?></td> 
-            </tr>
-          <?php } 
-          unset($cek,$data);?>
-        </table>  
-        
+        </script>
+        <div id="view-bestseller" class="w3-margin-top"></div>
       </div>
 
       <div class="w3-col s12 m12 l6">
@@ -799,6 +833,110 @@ unset($dret,$sqlret);
           
          
         </table>
+      </div>
+    </div>
+
+    <div class="w3-row-padding" style="margin:16px -16px 0">
+      <div class="w3-col s12 m12 l6 w3-margin-bottom">
+        <div class="input-group" style="display:flex;flex-wrap:wrap;align-items:center;gap:8px">
+          <h5 style="margin:0"><i class="fa fa-archive" style="color:#c0392b"></i><b> Top 10 Deadstock </b></h5>
+          <select id="deadstock-bulan" class="form-control" style="width:auto;min-width:120px;display:inline-block">
+            <option value="1">Januari</option>
+            <option value="2">Februari</option>
+            <option value="3">Maret</option>
+            <option value="4">April</option>
+            <option value="5">Mei</option>
+            <option value="6">Juni</option>
+            <option value="7">Juli</option>
+            <option value="8">Agustus</option>
+            <option value="9">September</option>
+            <option value="10">Oktober</option>
+            <option value="11">Nopember</option>
+            <option value="12">Desember</option>
+          </select>
+          <input id="deadstock-tahun" class="form-control" type="number" min="2023" style="width:90px;display:inline-block" value="<?=date('Y',strtotime($_SESSION['tgl_set']))?>">
+          <span><button id="btn-deadstock" type="button" class="btn yz-theme-d1 w3-border-black" style="margin-top:0"><i class="fa fa-caret-down"></i></button></span>
+        </div>
+        <div class="w3-row">
+          <div class="w3-col l6 s1 m6">&nbsp;</div>
+          <div class="w3-col l6 s11 m6">
+            <div id="tabdeadstock" class="w3-container w3-card-4"
+              style="display:none;position:absolute;border:1px solid white;border-radius:7px; background-color:rgba(0, 0, 0, 0.7);z-index:50">
+              <form action="dasbor_deadstock_cetak.php" method="post" target="_blank">
+                <select name="pilihbulan" id="ctk-dead-bulan" class="form-control w3-margin-top w3-margin-bottom w3-border-blue" style="background-color: transparent;color:white">
+                  <option value="1">JANUARI</option>
+                  <option value="2">FEBRUARI</option>
+                  <option value="3">MARET</option>
+                  <option value="4">APRIL</option>
+                  <option value="5">MEI</option>
+                  <option value="6">JUNI</option>
+                  <option value="7">JULI</option>
+                  <option value="8">AGUSTUS</option>
+                  <option value="9">SEPTEMBER</option>
+                  <option value="10">OKTOBER</option>
+                  <option value="11">NOPEMBER</option>
+                  <option value="12">DESEMBER</option>
+                </select>
+                <input id="ctk-dead-tahun" name="pilihtahun" class="w3-margin-bottom w3-text-white w3-border-blue form-control" type="number" min="2023" style="background-color:transparent;" value="<?=date('Y',strtotime($_SESSION['tgl_set']))?>">
+                <select name="ctkpil" class="form-control w3-margin-top w3-margin-bottom w3-border-blue" style="background-color: transparent;color:white">
+                  <?php $nctkd=0; $dsd=mysqli_query($connect,"SELECT * FROM bag_brg ORDER BY no_urut");
+                  while($qsd=mysqli_fetch_assoc($dsd)){
+                    $nctkd++;
+                    if($nctkd==1){ ?>
+                      <option value="0">SEMUA</option>
+                    <?php } ?>
+                    <option value="<?=$qsd['no_urut']?>"><?=$qsd['nm_bag']?></option>
+                  <?php } ?>
+                </select>
+                <input name="pilihst" class="w3-margin-bottom w3-text-white w3-border-blue form-control" type="number" min="0" style="background-color:transparent;" placeholder="Limit stok">
+                <button class="btn btn-md w3-border-white w3-margin-bottom form-control w3-hover" style="background-color:transparent;color:yellow" type="submit" onclick="document.getElementById('tabdeadstock').style.display='none'"><i class="fa fa-print"></i>&ensp;Cetak</button>
+              </form>
+            </div>
+          </div>
+        </div>
+        <script>
+          (function(){
+            var blnSet = <?= (int)date('n', strtotime($_SESSION['tgl_set'])) ?>;
+            var thnSet = <?= (int)date('Y', strtotime($_SESSION['tgl_set'])) ?>;
+            document.getElementById("deadstock-bulan").value = blnSet;
+            document.getElementById("ctk-dead-bulan").value = blnSet;
+            document.getElementById("deadstock-tahun").value = thnSet;
+            document.getElementById("ctk-dead-tahun").value = thnSet;
+
+            function loadDeadstock() {
+              var bulan = $("#deadstock-bulan").val();
+              var tahun = $("#deadstock-tahun").val();
+              document.getElementById("ctk-dead-bulan").value = bulan;
+              document.getElementById("ctk-dead-tahun").value = tahun;
+              $.ajax({
+                url: "dasbor_deadstock.php",
+                type: "POST",
+                data: { bulan: bulan, tahun: tahun },
+                beforeSend: function(e) {
+                  if (e && e.overrideMimeType) {
+                    e.overrideMimeType("text/html;charset=UTF-8");
+                  }
+                  $("#view-deadstock").html('<div class="w3-padding">Memuat...</div>');
+                },
+                success: function(html) {
+                  $("#view-deadstock").html(html);
+                },
+                error: function() {
+                  $("#view-deadstock").html('<div class="w3-padding text-danger">Gagal memuat deadstock</div>');
+                }
+              });
+            }
+
+            $(document).ready(function(){
+              $("#btn-deadstock").click(function(){
+                $("#tabdeadstock").slideToggle("fast");
+              });
+              $("#deadstock-bulan, #deadstock-tahun").on("change", loadDeadstock);
+              loadDeadstock();
+            });
+          })();
+        </script>
+        <div id="view-deadstock" class="w3-margin-top"></div>
       </div>
     </div>
   </div>
