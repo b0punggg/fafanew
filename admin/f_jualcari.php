@@ -632,8 +632,8 @@
                     byr_awal = Number(backangkades(byr_awal));
                     
                     var disc_member = 0;
-                    // Diskon member 1% jika belanja minimal Rp 350.000
-                    if(kd_member != '' && kd_member != null && byr_awal >= 350000) {
+                    // Diskon member 1% jika belanja minimal Rp 300.000
+                    if(kd_member != '' && kd_member != null && byr_awal >= 300000) {
                       disc_member = Math.floor(byr_awal * 0.01);
                     }
                     
@@ -941,7 +941,7 @@
               <div class="w3-col l7 s6" style="border-bottom: 1px solid lightgrey;margin-left: 15px">
                 <input id="disc_member" type="text" value="0" class= "form-control money" name="disc_member" readonly style="border:none;background-color: #f0f0f0;font-size: 12pt;text-align: right;color:purple">
                 <input type="hidden" id="disc_member_hidden" name="disc_member_hidden" value="0">
-                <small style="color: #666;font-size: 9pt;">Diskon 1% untuk member belanja minimal Rp 350.000</small>
+                <small style="color: #666;font-size: 9pt;">Diskon 1% untuk member belanja minimal Rp 300.000</small>
               </div>
 
               <label for="ongkir" class="w3-col l4 s5 col-form-label" style="font-size: 11pt;border-bottom: 1px solid lightgrey;margin-left: 5px"><i class="fa fa-truck" style="color:red"></i>&nbsp;&nbsp;<b>Jasa Kirim </b></label>
