@@ -78,11 +78,7 @@
         $brand_filter = isset($pesan[3]) ? $pesan[3] : '';
         $kd_toko  = $_SESSION['id_toko'];
         $nm_toko  = "";$ket='';
-        $brand_filter = mysqli_real_escape_string($connect, $brand_filter);
-        $allowed_brands = array('OMG','EMINA','WARDAH','MAKE OVER','KAHF','SKINTIFIC MARINA','G2G','GLAD2GLOW','HANASUI','SLAVINA','SCARLET','HADALABO','IMPLORA','VIVA','GLOW & LOVELY','PONDS','GARNIER','CUSSONS','NIVEA','PIXY','MAKARIZO','YOU','NYU','MIRANDA','DAZZLE ME','ANIMATE','MY BABY','MOELL','NPURE','SCORA','FACETOLOGY','JHONSONS','EUREKA','EVANGELINE','VITALIS','GATSBY','PUCELLE','ANDO','PRO ATT','CARVIL','BENING', 'LOGO','NEW ERA','SPEED','ARMOD','LUBRENA','VAUSTIN');
-        if(!in_array($brand_filter, $allowed_brands)){
-          $brand_filter = '';
-        }
+        $brand_filter = sanitizeReportBrandFilter($connect, $brand_filter);
         $brand_text = ($brand_filter === '') ? 'SEMUA' : $brand_filter;
         $brand_filter_sql = '';
         if($brand_filter !== ''){

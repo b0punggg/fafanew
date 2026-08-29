@@ -102,4 +102,72 @@
     return $total_jual.';'.$total_retur;
   }
   }
+  if (!function_exists('brandReportDefaults')) {
+    function brandReportDefaults() {
+      return array(
+        'BC OMG','OMG','EMINA','WARDAH','MAKE OVER','KAHF','SKINTIFIC MARINA','G2G','GLAD2GLOW',
+        'HANASUI','SLAVINA','SCARLET','HADALABO','IMPLORA','VIVA','GLOW & LOVELY','PONDS','GARNIER',
+        'CUSSONS','NIVEA','PIXY','MAKARIZO','YOU','NYU','MIRANDA','DAZZLE ME','ANIMATE','MY BABY',
+        'MOELL','NPURE','SCORA','FACETOLOGY','JHONSONS','EUREKA','EVANGELINE','VITALIS','GATSBY',
+        'PUCELLE','ANDO','PRO ATT','CARVIL','BENING','LOGO','NEW ERA','SPEED','ARMOD','LUBRENA','VAUSTIN'
+      );
+    }
+  }
+
+  if (!function_exists('ensureBrandReportTable')) {
+    function ensureBrandReportTable($connect) {
+      mysqli_query($connect, "CREATE TABLE IF NOT EXISTS brand_report (
+        no_urut INT NOT NULL AUTO_INCREMENT,
+        nm_brand VARCHAR(100) NOT NULL,
+        PRIMARY KEY (no_urut),
+        UNIQUE KEY uq_nm_brand (nm_brand)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+
+      $cek = mysqli_query($connect, "SELECT COUNT(*) AS jml FROM brand_report");
+      if ($cek) {
+        $row = mysqli_fetch_assoc($cek);
+        mysqli_free_result($cek);
+        if ((int)$row['jml'] === 0) {
+          foreach (brandReportDefaults() as $nm) {
+            $nm_esc = mysqli_real_escape_string($connect, $nm);
+            mysqli_query($connect, "INSERT IGNORE INTO brand_report (nm_brand) VALUES ('$nm_esc')");
+          }
+        }
+      }
+    }
+  }
+
+  if (!function_exists('getReportBrandOptions')) {
+    function getReportBrandOptions($connect) {
+      ensureBrandReportTable($connect);
+      $brands = array();
+      $q = mysqli_query($connect, "SELECT nm_brand FROM brand_report ORDER BY nm_brand ASC");
+      if ($q) {
+        while ($r = mysqli_fetch_assoc($q)) {
+          $brands[] = $r['nm_brand'];
+        }
+        mysqli_free_result($q);
+      }
+      return $brands;
+    }
+  }
+
+  if (!function_exists('sanitizeReportBrandFilter')) {
+    function sanitizeReportBrandFilter($connect, $brand_filter) {
+      if ($brand_filter === '' || $brand_filter === null) {
+        return '';
+      }
+      ensureBrandReportTable($connect);
+      $brand_filter = mysqli_real_escape_string($connect, trim($brand_filter));
+      $q = mysqli_query($connect, "SELECT nm_brand FROM brand_report WHERE nm_brand='$brand_filter' LIMIT 1");
+      if ($q && mysqli_num_rows($q) >= 1) {
+        mysqli_free_result($q);
+        return $brand_filter;
+      }
+      if ($q) {
+        mysqli_free_result($q);
+      }
+      return '';
+    }
+  }
 ?>

@@ -3,7 +3,9 @@
 <?php 
  include 'cekmasuk.php';
  include 'config.php';
+ require_once 'f_cetak_jual_item_helper.php';
  $connect=opendtcek();
+ $report_brands = getReportBrandOptions($connect);
  setlocale(LC_MONETARY , "ID");
  ?>	
 <head>
@@ -411,6 +413,7 @@
           <a href="f_masbrg.php" class="w3-bar-item w3-button w3-border" style="padding:2px;padding-left:20px"><i class="fa fa-bullseye">&nbsp;</i>Barang</a>
           <a href="m_paket.php" class="w3-bar-item w3-button w3-border" style="padding:2px;padding-left:20px"><i class="fa fa-bullseye">&nbsp;</i>Inisial Perpaket</a>
           <a href="m_bagian.php" class="w3-bar-item w3-button w3-border" style="padding:2px;padding-left:20px"><i class="fa fa-bullseye">&nbsp;</i>Bagian Penjualan</a>
+          <a href="m_brand_report.php" class="w3-bar-item w3-button w3-border" style="padding:2px;padding-left:20px"><i class="fa fa-bullseye">&nbsp;</i>Brand Report Penjualan</a>
           <a href="f_discount_promo.php" class="w3-bar-item w3-button w3-border" style="padding:2px;padding-left:20px"><i class="fa fa-bullseye">&nbsp;</i>Discount Promo</a>
           <a href="m_persediaan_bulan.php" class="w3-bar-item w3-button w3-border" style="padding:2px;padding-left:20px"><i class="fa fa-bullseye">&nbsp;</i>Persediaan Barang/Bulan</a>
           
@@ -558,6 +561,7 @@
             <a href="f_masbrg.php" class="w3-bar-item w3-button w3-border" style="padding:4px;padding-left:20px"><i class="fa fa-bullseye">&nbsp;</i>Barang</a>
             <a href="m_paket.php" class="w3-bar-item w3-button w3-border" style="padding:4px;padding-left:20px"><i class="fa fa-bullseye">&nbsp;</i>Inisial Perpaket</a>
             <a href="m_bagian.php" class="w3-bar-item w3-button w3-border" style="padding:2px;padding-left:20px"><i class="fa fa-bullseye">&nbsp;</i>Bagian Penjualan</a>
+            <a href="m_brand_report.php" class="w3-bar-item w3-button w3-border" style="padding:2px;padding-left:20px"><i class="fa fa-bullseye">&nbsp;</i>Brand Report Penjualan</a>
             <a href="f_discount_promo.php" class="w3-bar-item w3-button w3-border" style="padding:4px;padding-left:20px"><i class="fa fa-bullseye">&nbsp;</i>Discount Promo</a>
             <a href="m_persediaan_bulan.php" class="w3-bar-item w3-button w3-border" style="padding:4px;padding-left:20px"><i class="fa fa-bullseye">&nbsp;</i>Persediaan Barang/Bulan</a>
             
@@ -1140,52 +1144,9 @@
                     <div class="col-sm-4">
                       <select class="form-control" name="kd_brand" id="brand_jual_report" style="border: 1px solid black;font-size:12px ;height: 30px;width: 165px" tabindex="4">
                         <option value="">SEMUA</option>
-                        <option value="OMG">OMG</option>
-                        <option value="EMINA">EMINA</option>
-                        <option value="WARDAH">WARDAH</option>
-                        <option value="MAKE OVER">MAKE OVER</option>
-                        <option value="KAHF">KAHF</option>
-                        <option value="SKINTIFIC MARINA">SKINTIFIC MARINA</option>
-                        <option value="G2G">G2G</option>
-                        <option value="HANASUI">HANASUI</option>
-                        <option value="SLAVINA">SLAVINA</option>
-                        <option value="SCARLET">SCARLET</option>
-                        <option value="HADALABO">HADALABO</option>
-                        <option value="IMPLORA">IMPLORA</option>
-                        <option value="VIVA">VIVA</option>
-                        <option value="GLOW & LOVELY">GLOW & LOVELY</option>
-                        <option value="PONDS">PONDS</option>
-                        <option value="GARNIER">GARNIER</option>
-                        <option value="CUSSONS">CUSSONS</option>
-                        <option value="NIVEA">NIVEA</option>
-                        <option value="PIXY">PIXY</option>
-                        <option value="MAKARIZO">MAKARIZO</option>
-                        <option value="YOU">YOU</option>
-                        <option value="NYU">NYU</option>
-                        <option value="MIRANDA">MIRANDA</option>
-                        <option value="DAZZLE ME">DAZZLE ME</option>
-                        <option value="ANIMATE">ANIMATE</option>
-                        <option value="MY BABY">MY BABY</option>
-                        <option value="MOELL">MOELL</option>
-                        <option value="NPURE">NPURE</option>
-                        <option value="SCORA">SCORA</option>
-                        <option value="FACETOLOGY">FACETOLOGY</option>
-                        <option value="JHONSONS">JHONSONS</option>
-                        <option value="EUREKA">EUREKA</option>
-                        <option value="EVANGELINE">EVANGELINE</option>
-                        <option value="VITALIS">VITALIS</option>
-                        <option value="GATSBY">GATSBY</option>
-                        <option value="PUCELLE">PUCELLE</option>
-                        <option value="ANDO">ANDO</option>
-                        <option value="PRO ATT">PRO ATT</option>
-                        <option value="CARVIL">CARVIL</option>
-                        <option value="BENING">BENING</option>
-                        <option value="LOGO">LOGO</option>
-                        <option value="NEW ERA">NEW ERA</option>
-                        <option value="SPEED">SPEED</option>
-                        <option value="ARMOD">ARMOD</option>
-                        <option value="LUBRENA">LUBRENA</option>
-                        <option value="VAUSTIN">VAUSTIN</option>
+                        <?php foreach ($report_brands as $rb): ?>
+                        <option value="<?= htmlspecialchars($rb, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($rb, ENT_QUOTES, 'UTF-8') ?></option>
+                        <?php endforeach; ?>
                       </select>
                     </div>
                   </div>
