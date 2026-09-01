@@ -7,6 +7,7 @@
 session_start();
 include 'cekmasuk.php';
 include 'config.php';
+include 'f_cetak_jual_item_helper.php';
 
 // ==============================
 // KONEKSI
@@ -42,6 +43,9 @@ $semua = isset($_GET['semua']) ? (int)$_GET['semua'] : 0;
 $bulan = isset($_GET['bulan']) ? $_GET['bulan'] : '';
 $tahun = isset($_GET['tahun']) ? $_GET['tahun'] : '';
 $stok  = isset($_GET['stok']) ? (int)$_GET['stok'] : 0; // 1 = sertakan stok kosong
+$brand_filter = sanitizeReportBrandFilter($connect, isset($_GET['brand']) ? $_GET['brand'] : '');
+$brand_sql = ($brand_filter === '') ? '' : " AND UPPER(m.nm_brg) LIKE UPPER('%$brand_filter%') ";
+$brand_text = ($brand_filter === '') ? 'SEMUA' : $brand_filter;
 
 if($semua != 1 && ($bulan=='' || $tahun=='')){
   exit("Parameter bulan/tahun tidak lengkap. Atau gunakan opsi Cetak semua data.");
@@ -98,6 +102,7 @@ if($semua == 1){
   LEFT JOIN mas_brg m ON sub.kd_brg = m.kd_brg AND m.kd_toko = '$kd_toko'
   LEFT JOIN supplier s ON sub.kd_sup = s.kd_sup
   LEFT JOIN bag_brg b ON sub.id_bag = b.no_urut
+  WHERE 1=1 $brand_sql
   ORDER BY COALESCE(m.nm_brg, sub.kd_brg) ASC";
 } else {
   // Filter per bulan/tahun
@@ -134,6 +139,7 @@ if($semua == 1){
   LEFT JOIN mas_brg m ON sub.kd_brg = m.kd_brg AND m.kd_toko = '$kd_toko'
   LEFT JOIN supplier s ON sub.kd_sup = s.kd_sup
   LEFT JOIN bag_brg b ON sub.id_bag = b.no_urut
+  WHERE 1=1 $brand_sql
   ORDER BY COALESCE(m.nm_brg, sub.kd_brg) ASC";
 }
 
@@ -177,6 +183,7 @@ if(!$q){
         } 
         ?>
       </h4>
+      <div style="margin-bottom:8px;">Brand: <?php echo htmlspecialchars($brand_text); ?></div>
     </div>
 
     <table>

@@ -4,8 +4,10 @@
 <?php 
  include 'starting.php';
  include 'cekmasuk.php';
+ include 'f_cetak_jual_item_helper.php';
  $connect=opendtcek();
  $kd_toko=$_SESSION['id_toko'];
+ $report_brands = getReportBrandOptions($connect);
 ?>
 
 <div id="main" style="font-size: 10pt">
@@ -29,6 +31,7 @@
           bulan: $("#bulan").val(),
           tahun: $("#tahun").val(),
           cek_stok_kosong: $("#cek_stok_kosong").is(':checked') ? 1 : 0,
+          kd_brand: $("#kd_brand").val(),
           filter_bulan_tahun: filterBulanTahunAktif ? 1 : 0, // Flag apakah filter bulan/tahun aktif
           page: page_number,
           search: search
@@ -96,7 +99,8 @@
       document.getElementById('tahun').value="<?=date('Y')?>";
       document.getElementById('keyktpersediaan').value="";
       document.getElementById('cek_stok_kosong').checked = false;
-      
+      document.getElementById('kd_brand').value = "";
+
       // Nonaktifkan flag filter bulan/tahun untuk menampilkan semua data
       filterBulanTahunAktif = false;
       
@@ -156,6 +160,17 @@
             <div class="form-group">
               <label><b>Tahun</b></label>
               <input class="form-control hrf_arial" id="tahun" type="number" name="tahun" value="<?=date('Y')?>" style="border: 1px solid black;font-size: 10pt;">
+            </div>
+          </div>
+          <div class="col-sm-3">
+            <div class="form-group">
+              <label><b>Brand</b></label>
+              <select class="form-control hrf_arial" id="kd_brand" name="kd_brand" style="border: 1px solid black;font-size: 10pt;">
+                <option value="">SEMUA</option>
+                <?php foreach ($report_brands as $rb): ?>
+                <option value="<?= htmlspecialchars($rb, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($rb, ENT_QUOTES, 'UTF-8') ?></option>
+                <?php endforeach; ?>
+              </select>
             </div>
           </div>
           <div class="col-sm-3">
@@ -236,7 +251,8 @@ function cetakPDF(){
   if(!validasiCetak()) return;
   var cetakSemua = $("#cek_cetak_semua").is(':checked') ? 1 : 0;
   var stok = $("#cek_stok_kosong").is(':checked') ? 1 : 0;
-  var url = "cetak_persediaan_pdf.php?stok="+stok;
+  var brand = encodeURIComponent($("#kd_brand").val());
+  var url = "cetak_persediaan_pdf.php?stok="+stok+"&brand="+brand;
   if(cetakSemua){
     url += "&semua=1";
   } else {
@@ -249,7 +265,8 @@ function cetakExcel(){
   if(!validasiCetak()) return;
   var cetakSemua = $("#cek_cetak_semua").is(':checked') ? 1 : 0;
   var stok = $("#cek_stok_kosong").is(':checked') ? 1 : 0;
-  var url = "cetak_persediaan_excel.php?stok="+stok;
+  var brand = encodeURIComponent($("#kd_brand").val());
+  var url = "cetak_persediaan_excel.php?stok="+stok+"&brand="+brand;
   if(cetakSemua){
     url += "&semua=1";
   } else {

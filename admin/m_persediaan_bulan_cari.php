@@ -10,8 +10,11 @@ if(!session_id()){
   session_start();
 }
 include 'config.php';
+include 'f_cetak_jual_item_helper.php';
 $kd_toko = $_SESSION['id_toko'];
 $connect = opendtcek();
+$brand_filter = sanitizeReportBrandFilter($connect, isset($_POST['kd_brand']) ? $_POST['kd_brand'] : '');
+$brand_sql = ($brand_filter === '') ? '' : " AND UPPER(mas_brg.nm_brg) LIKE UPPER('%$brand_filter%') ";
 
 // Pastikan tabel persediaan_bulan ada
 $create_table = "CREATE TABLE IF NOT EXISTS `persediaan_bulan` (
@@ -118,7 +121,7 @@ if($filter_bulan_tahun == 0){
       INNER JOIN mas_brg ON beli_brg.kd_brg = mas_brg.kd_brg AND beli_brg.kd_toko = mas_brg.kd_toko
       LEFT JOIN supplier ON beli_brg.kd_sup = supplier.kd_sup
       LEFT JOIN bag_brg ON beli_brg.id_bag = bag_brg.no_urut
-      WHERE $params AND beli_brg.kd_toko='$kd_toko' $tampil_stok1
+      WHERE $params AND beli_brg.kd_toko='$kd_toko' $tampil_stok1 $brand_sql
       GROUP BY beli_brg.kd_brg
       $having_clause
       ORDER BY mas_brg.nm_brg ASC
@@ -130,7 +133,7 @@ if($filter_bulan_tahun == 0){
       SELECT beli_brg.kd_brg
       FROM beli_brg 
       INNER JOIN mas_brg ON beli_brg.kd_brg = mas_brg.kd_brg AND beli_brg.kd_toko = mas_brg.kd_toko
-      WHERE $params AND beli_brg.kd_toko='$kd_toko' $tampil_stok1
+      WHERE $params AND beli_brg.kd_toko='$kd_toko' $tampil_stok1 $brand_sql
       GROUP BY beli_brg.kd_brg
       $having_clause
     ) jumlah";
@@ -166,7 +169,7 @@ if($filter_bulan_tahun == 0){
       INNER JOIN mas_brg ON beli_brg.kd_brg = mas_brg.kd_brg AND beli_brg.kd_toko = mas_brg.kd_toko
       LEFT JOIN supplier ON beli_brg.kd_sup = supplier.kd_sup
       LEFT JOIN bag_brg ON beli_brg.id_bag = bag_brg.no_urut
-      WHERE beli_brg.kd_toko='$kd_toko' $tampil_stok
+      WHERE beli_brg.kd_toko='$kd_toko' $tampil_stok $brand_sql
       GROUP BY beli_brg.kd_brg
       $having_clause
       ORDER BY mas_brg.nm_brg ASC
@@ -178,7 +181,7 @@ if($filter_bulan_tahun == 0){
       SELECT beli_brg.kd_brg
       FROM beli_brg 
       INNER JOIN mas_brg ON beli_brg.kd_brg = mas_brg.kd_brg AND beli_brg.kd_toko = mas_brg.kd_toko
-      WHERE beli_brg.kd_toko='$kd_toko' $tampil_stok
+      WHERE beli_brg.kd_toko='$kd_toko' $tampil_stok $brand_sql
       GROUP BY beli_brg.kd_brg
       $having_clause
     ) jumlah";
@@ -247,7 +250,7 @@ if($filter_bulan_tahun == 0){
       LEFT JOIN mas_brg ON sub.kd_brg = mas_brg.kd_brg
       LEFT JOIN supplier ON sub.kd_sup = supplier.kd_sup
       LEFT JOIN bag_brg ON sub.id_bag = bag_brg.no_urut
-      WHERE (mas_brg.nm_brg LIKE '%$keyword_escaped%' OR sub.kd_brg LIKE '%$keyword_escaped%' OR supplier.nm_sup LIKE '%$keyword_escaped%')
+      WHERE (mas_brg.nm_brg LIKE '%$keyword_escaped%' OR sub.kd_brg LIKE '%$keyword_escaped%' OR supplier.nm_sup LIKE '%$keyword_escaped%') $brand_sql
       ORDER BY COALESCE(mas_brg.nm_brg, sub.kd_brg) ASC
       LIMIT $limit_start, $limit");
   } else {
@@ -288,6 +291,7 @@ if($filter_bulan_tahun == 0){
       LEFT JOIN mas_brg ON sub.kd_brg = mas_brg.kd_brg
       LEFT JOIN supplier ON sub.kd_sup = supplier.kd_sup
       LEFT JOIN bag_brg ON sub.id_bag = bag_brg.no_urut
+      WHERE 1=1 $brand_sql
       ORDER BY COALESCE(mas_brg.nm_brg, sub.kd_brg) ASC
       LIMIT $limit_start, $limit");
   }
@@ -309,9 +313,25 @@ if($filter_bulan_tahun == 0){
       ) AS sub
       LEFT JOIN mas_brg ON sub.kd_brg = mas_brg.kd_brg
       LEFT JOIN supplier ON sub.kd_sup = supplier.kd_sup
-      WHERE (mas_brg.nm_brg LIKE '%$keyword_escaped%' OR sub.kd_brg LIKE '%$keyword_escaped%' OR supplier.nm_sup LIKE '%$keyword_escaped%')
+      WHERE (mas_brg.nm_brg LIKE '%$keyword_escaped%' OR sub.kd_brg LIKE '%$keyword_escaped%' OR supplier.nm_sup LIKE '%$keyword_escaped%') $brand_sql
     ) AS final";
   } else {
+    if($brand_filter !== ''){
+      $count_query_beli = "SELECT COUNT(*) AS jumlah FROM (
+        SELECT sub.kd_brg
+        FROM (
+          SELECT 
+            beli_brg.kd_brg,
+            SUM(beli_brg.stok_jual) AS stok_juals
+          FROM beli_brg
+          WHERE $where_beli
+          GROUP BY beli_brg.kd_brg
+          $having_clause
+        ) AS sub
+        LEFT JOIN mas_brg ON sub.kd_brg = mas_brg.kd_brg AND mas_brg.kd_toko = '$kd_toko'
+        WHERE 1=1 $brand_sql
+      ) AS final";
+    } else {
     $count_query_beli = "SELECT COUNT(*) AS jumlah FROM (
       SELECT 
         beli_brg.kd_brg,
@@ -321,6 +341,7 @@ if($filter_bulan_tahun == 0){
       GROUP BY beli_brg.kd_brg
       $having_clause
     ) AS subquery";
+    }
   }
   $sql2 = mysqli_query($connect, $count_query_beli);
   
