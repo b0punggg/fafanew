@@ -9,6 +9,8 @@ include 'cekmasuk.php';
 include 'config.php';
 include 'f_cetak_jual_item_helper.php';
 
+$is_admin = (isset($_SESSION['kodepemakai']) && $_SESSION['kodepemakai'] == '2');
+
 // ==============================
 // KONEKSI
 // ==============================
@@ -55,6 +57,18 @@ if(strlen($bulan) == 1 && $bulan !== ''){
   $bulan = '0'.$bulan;
 }
 
+$keluar_date_sql = ($semua != 1 && $bulan !== '' && $tahun !== '')
+  ? " AND MONTH(dum_jual.tgl_jual)='$bulan' AND YEAR(dum_jual.tgl_jual)='$tahun'"
+  : '';
+$sql_from_keluar = "(
+  SELECT dum_jual.kd_brg, SUM(dum_jual.qty_brg) AS qty_keluar
+  FROM dum_jual
+  WHERE dum_jual.kd_toko='$kd_toko'
+    AND (dum_jual.ket IS NULL OR dum_jual.ket <> 'RETUR BARANG')
+    $keluar_date_sql
+  GROUP BY dum_jual.kd_brg
+) klr";
+
 // ==============================
 // NAMA BULAN
 // ==============================
@@ -86,7 +100,8 @@ if($semua == 1){
     b.nm_bag,
     sub.stok_juals,
     sub.hrg_beli,
-    (sub.stok_juals * sub.hrg_beli) AS nilai_persediaan
+    (sub.stok_juals * sub.hrg_beli) AS nilai_persediaan,
+    COALESCE(klr.qty_keluar, 0) AS qty_keluar
   FROM (
     SELECT 
       beli_brg.kd_brg,
@@ -102,6 +117,7 @@ if($semua == 1){
   LEFT JOIN mas_brg m ON sub.kd_brg = m.kd_brg AND m.kd_toko = '$kd_toko'
   LEFT JOIN supplier s ON sub.kd_sup = s.kd_sup
   LEFT JOIN bag_brg b ON sub.id_bag = b.no_urut
+  LEFT JOIN $sql_from_keluar ON klr.kd_brg = sub.kd_brg
   WHERE 1=1 $brand_sql
   ORDER BY COALESCE(m.nm_brg, sub.kd_brg) ASC";
 } else {
@@ -123,7 +139,8 @@ if($semua == 1){
     b.nm_bag,
     sub.stok_juals,
     sub.hrg_beli,
-    (sub.stok_juals * sub.hrg_beli) AS nilai_persediaan
+    (sub.stok_juals * sub.hrg_beli) AS nilai_persediaan,
+    COALESCE(klr.qty_keluar, 0) AS qty_keluar
   FROM (
     SELECT 
       beli_brg.kd_brg,
@@ -139,6 +156,7 @@ if($semua == 1){
   LEFT JOIN mas_brg m ON sub.kd_brg = m.kd_brg AND m.kd_toko = '$kd_toko'
   LEFT JOIN supplier s ON sub.kd_sup = s.kd_sup
   LEFT JOIN bag_brg b ON sub.id_bag = b.no_urut
+  LEFT JOIN $sql_from_keluar ON klr.kd_brg = sub.kd_brg
   WHERE 1=1 $brand_sql
   ORDER BY COALESCE(m.nm_brg, sub.kd_brg) ASC";
 }
@@ -195,8 +213,11 @@ if(!$q){
           <th style="width:15%;">Supplier</th>
           <th style="width:15%;">Bagian</th>
           <th style="width:8%;">Stok</th>
+          <th style="width:8%;">Jml. Keluar</th>
+          <?php if($is_admin): ?>
           <th style="width:12%;">Harga Beli</th>
           <th style="width:15%;">Nilai Persediaan</th>
+          <?php endif; ?>
         </tr>
       </thead>
       <tbody>
@@ -206,14 +227,16 @@ if(!$q){
         if(mysqli_num_rows($q) == 0){
           ?>
           <tr>
-            <td colspan="8" class="no-border" style="text-align:center;padding:12px;">
+            <td colspan="<?php echo $is_admin ? 9 : 7; ?>" class="no-border" style="text-align:center;padding:12px;">
               <?php echo $semua == 1 ? "Tidak ada data persediaan." : "Tidak ada data persediaan untuk periode ini."; ?>
             </td>
           </tr>
           <?php
         } else {
           while($r = mysqli_fetch_assoc($q)){
-            $total += $r['nilai_persediaan'];
+            if($is_admin){
+              $total += $r['nilai_persediaan'];
+            }
             ?>
             <tr>
               <td style="text-align:right;"><?php echo $no++; ?></td>
@@ -225,22 +248,29 @@ if(!$q){
                 <?php echo number_format($r['stok_juals'],0,',','.'); ?>
               </td>
               <td style="text-align:right;">
+                <?php echo number_format(isset($r['qty_keluar']) ? $r['qty_keluar'] : 0,0,',','.'); ?>
+              </td>
+              <?php if($is_admin): ?>
+              <td style="text-align:right;">
                 <?php echo number_format($r['hrg_beli'],0,',','.'); ?>
               </td>
               <td style="text-align:right;">
                 <?php echo number_format($r['nilai_persediaan'],0,',','.'); ?>
               </td>
+              <?php endif; ?>
             </tr>
             <?php
           }
+          if($is_admin):
           ?>
           <tr>
-            <td colspan="7" style="text-align:right;font-weight:bold;">TOTAL</td>
+            <td colspan="8" style="text-align:right;font-weight:bold;">TOTAL</td>
             <td style="text-align:right;font-weight:bold;">
               <?php echo number_format($total,0,',','.'); ?>
             </td>
           </tr>
           <?php
+          endif;
         }
         ?>
       </tbody>

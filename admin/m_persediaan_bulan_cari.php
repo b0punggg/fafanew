@@ -12,6 +12,7 @@ if(!session_id()){
 include 'config.php';
 include 'f_cetak_jual_item_helper.php';
 $kd_toko = $_SESSION['id_toko'];
+$is_admin = (isset($_SESSION['kodepemakai']) && $_SESSION['kodepemakai'] == '2');
 $connect = opendtcek();
 $brand_filter = sanitizeReportBrandFilter($connect, isset($_POST['kd_brand']) ? $_POST['kd_brand'] : '');
 $brand_sql = ($brand_filter === '') ? '' : " AND UPPER(mas_brg.nm_brg) LIKE UPPER('%$brand_filter%') ";
@@ -52,6 +53,18 @@ $filter_bulan_tahun = isset($_POST['filter_bulan_tahun']) ? intval($_POST['filte
 if(strlen($bulan) == 1){
   $bulan = '0' . $bulan;
 }
+
+$keluar_date_sql = ($filter_bulan_tahun == 1)
+  ? " AND MONTH(dum_jual.tgl_jual)='$bulan' AND YEAR(dum_jual.tgl_jual)='$tahun'"
+  : '';
+$sql_from_keluar = "(
+  SELECT dum_jual.kd_brg, SUM(dum_jual.qty_brg) AS qty_keluar
+  FROM dum_jual
+  WHERE dum_jual.kd_toko='$kd_toko'
+    AND (dum_jual.ket IS NULL OR dum_jual.ket <> 'RETUR BARANG')
+    $keluar_date_sql
+  GROUP BY dum_jual.kd_brg
+) klr";
 
 // Cek setting tampilan stok kosong (sama seperti f_stokbrg_cari.php)
 $sqlstok = @mysqli_query($connect, "SELECT kode FROM seting WHERE nm_per='tampil_stok'");
@@ -116,11 +129,13 @@ if($filter_bulan_tahun == 0){
       bag_brg.nm_bag,
       '$bulan' AS bulan,
       '$tahun' AS tahun,
-      (SUM(beli_brg.stok_jual) * AVG(beli_brg.hrg_beli)) AS nilai_persediaan
+      (SUM(beli_brg.stok_jual) * AVG(beli_brg.hrg_beli)) AS nilai_persediaan,
+      COALESCE(MAX(klr.qty_keluar), 0) AS qty_keluar
       FROM beli_brg
       INNER JOIN mas_brg ON beli_brg.kd_brg = mas_brg.kd_brg AND beli_brg.kd_toko = mas_brg.kd_toko
       LEFT JOIN supplier ON beli_brg.kd_sup = supplier.kd_sup
       LEFT JOIN bag_brg ON beli_brg.id_bag = bag_brg.no_urut
+      LEFT JOIN $sql_from_keluar ON klr.kd_brg = beli_brg.kd_brg
       WHERE $params AND beli_brg.kd_toko='$kd_toko' $tampil_stok1 $brand_sql
       GROUP BY beli_brg.kd_brg
       $having_clause
@@ -164,11 +179,13 @@ if($filter_bulan_tahun == 0){
       bag_brg.nm_bag,
       '$bulan' AS bulan,
       '$tahun' AS tahun,
-      (SUM(beli_brg.stok_jual) * AVG(beli_brg.hrg_beli)) AS nilai_persediaan
+      (SUM(beli_brg.stok_jual) * AVG(beli_brg.hrg_beli)) AS nilai_persediaan,
+      COALESCE(MAX(klr.qty_keluar), 0) AS qty_keluar
       FROM beli_brg
       INNER JOIN mas_brg ON beli_brg.kd_brg = mas_brg.kd_brg AND beli_brg.kd_toko = mas_brg.kd_toko
       LEFT JOIN supplier ON beli_brg.kd_sup = supplier.kd_sup
       LEFT JOIN bag_brg ON beli_brg.id_bag = bag_brg.no_urut
+      LEFT JOIN $sql_from_keluar ON klr.kd_brg = beli_brg.kd_brg
       WHERE beli_brg.kd_toko='$kd_toko' $tampil_stok $brand_sql
       GROUP BY beli_brg.kd_brg
       $having_clause
@@ -234,7 +251,8 @@ if($filter_bulan_tahun == 0){
       bag_brg.nm_bag,
       '$bulan' AS bulan,
       '$tahun' AS tahun,
-      (sub.stok_juals * sub.hrg_beli) AS nilai_persediaan
+      (sub.stok_juals * sub.hrg_beli) AS nilai_persediaan,
+      COALESCE(klr.qty_keluar, 0) AS qty_keluar
       FROM (
         SELECT 
           beli_brg.kd_sup,
@@ -250,6 +268,7 @@ if($filter_bulan_tahun == 0){
       LEFT JOIN mas_brg ON sub.kd_brg = mas_brg.kd_brg
       LEFT JOIN supplier ON sub.kd_sup = supplier.kd_sup
       LEFT JOIN bag_brg ON sub.id_bag = bag_brg.no_urut
+      LEFT JOIN $sql_from_keluar ON klr.kd_brg = sub.kd_brg
       WHERE (mas_brg.nm_brg LIKE '%$keyword_escaped%' OR sub.kd_brg LIKE '%$keyword_escaped%' OR supplier.nm_sup LIKE '%$keyword_escaped%') $brand_sql
       ORDER BY COALESCE(mas_brg.nm_brg, sub.kd_brg) ASC
       LIMIT $limit_start, $limit");
@@ -275,7 +294,8 @@ if($filter_bulan_tahun == 0){
       bag_brg.nm_bag,
       '$bulan' AS bulan,
       '$tahun' AS tahun,
-      (sub.stok_juals * sub.hrg_beli) AS nilai_persediaan
+      (sub.stok_juals * sub.hrg_beli) AS nilai_persediaan,
+      COALESCE(klr.qty_keluar, 0) AS qty_keluar
       FROM (
         SELECT 
           beli_brg.kd_sup,
@@ -291,6 +311,7 @@ if($filter_bulan_tahun == 0){
       LEFT JOIN mas_brg ON sub.kd_brg = mas_brg.kd_brg
       LEFT JOIN supplier ON sub.kd_sup = supplier.kd_sup
       LEFT JOIN bag_brg ON sub.id_bag = bag_brg.no_urut
+      LEFT JOIN $sql_from_keluar ON klr.kd_brg = sub.kd_brg
       WHERE 1=1 $brand_sql
       ORDER BY COALESCE(mas_brg.nm_brg, sub.kd_brg) ASC
       LIMIT $limit_start, $limit");
@@ -379,8 +400,11 @@ $total_nilai = 0;
       <th style="width: 12%">Supplier</th>
       <th style="width: 10%">Bagian</th>
       <th style="width: 10%">Stok (Satuan Kecil)</th>
+      <th style="width: 10%">Jml. Keluar</th>
+      <?php if($is_admin): ?>
       <th style="width: 10%">Harga Beli</th>
       <th style="width: 12%">Nilai Persediaan</th>
+      <?php endif; ?>
       <th style="width: 8%">Aksi</th>
     </tr>
   </thead>
@@ -390,15 +414,18 @@ $total_nilai = 0;
       while($data = mysqli_fetch_array($sql)){
         $no++;
         // Pastikan nilai tidak null
-        $hrg_beli_val = isset($data['hrg_beli']) && $data['hrg_beli'] !== null ? floatval($data['hrg_beli']) : 0;
+        $hrg_beli_val = 0;
+        $nilai_persediaan = 0;
         $stok_juals_val = isset($data['stok_juals']) && $data['stok_juals'] !== null ? floatval($data['stok_juals']) : 0;
-        // Jika nilai_persediaan sudah dihitung di query (dari beli_brg), gunakan itu, jika tidak hitung manual
-        if(isset($data['nilai_persediaan']) && $data['nilai_persediaan'] !== null && $data['nilai_persediaan'] != ''){
-          $nilai_persediaan = floatval($data['nilai_persediaan']);
-        } else {
-          $nilai_persediaan = $hrg_beli_val * $stok_juals_val;
+        if($is_admin){
+          $hrg_beli_val = isset($data['hrg_beli']) && $data['hrg_beli'] !== null ? floatval($data['hrg_beli']) : 0;
+          if(isset($data['nilai_persediaan']) && $data['nilai_persediaan'] !== null && $data['nilai_persediaan'] != ''){
+            $nilai_persediaan = floatval($data['nilai_persediaan']);
+          } else {
+            $nilai_persediaan = $hrg_beli_val * $stok_juals_val;
+          }
+          $total_nilai += $nilai_persediaan;
         }
-        $total_nilai += $nilai_persediaan;
         
         // Konversi stok ke satuan kemasan (sama seperti f_cetak_pilih_stok.php)
         $stok1 = $stok2 = $stok3 = '';
@@ -426,6 +453,24 @@ $total_nilai = 0;
         } else {
           $stok3 = '0,00 ' . $nm_kem3;
         }
+
+        $qty_keluar_val = isset($data['qty_keluar']) && $data['qty_keluar'] !== null ? floatval($data['qty_keluar']) : 0;
+        $klr1 = $klr2 = $klr3 = '';
+        if ($jum_kem1 > 0) {
+          $klr1 = gantitides($qty_keluar_val / $jum_kem1) . ' ' . $nm_kem1;
+        } else {
+          $klr1 = gantitides($qty_keluar_val);
+        }
+        if ($jum_kem2 > 0) {
+          $klr2 = gantitides($qty_keluar_val / $jum_kem2) . ' ' . $nm_kem2;
+        } else {
+          $klr2 = '0,00 ' . $nm_kem2;
+        }
+        if ($jum_kem3 > 0) {
+          $klr3 = gantitides($qty_keluar_val / $jum_kem3) . ' ' . $nm_kem3;
+        } else {
+          $klr3 = '0,00 ' . $nm_kem3;
+        }
         ?>
         <tr>
           <td align="center"><?=$no?></td>
@@ -440,11 +485,20 @@ $total_nilai = 0;
               <?=$stok3?>
             </small>
           </td>
+          <td align="right">
+            <small>
+              <?=$klr1?><br>
+              <?=$klr2?><br>
+              <?=$klr3?>
+            </small>
+          </td>
+          <?php if($is_admin): ?>
           <td align="right"><?=gantitides($hrg_beli_val)?></td>
           <td align="right"><b><?=gantitides($nilai_persediaan)?></b></td>
+          <?php endif; ?>
           <td align="center">
             <button onclick="detailData('<?=$data['kd_brg']?>', '<?=$data['bulan']?>', '<?=$data['tahun']?>')" class="btn btn-sm btn-info" title="Detail"><i class="fa fa-eye"></i></button>
-            <?php if(isset($use_persediaan_table) && $use_persediaan_table): ?>
+            <?php if($is_admin && isset($use_persediaan_table) && $use_persediaan_table): ?>
               <button onclick="editData('<?=$data['kd_brg']?>', '<?=$data['bulan']?>', '<?=$data['tahun']?>')" class="btn btn-sm btn-warning" title="Edit"><i class="fa fa-edit"></i></button>
               <button onclick="hapusData('<?=$data['kd_brg']?>', '<?=$data['bulan']?>', '<?=$data['tahun']?>')" class="btn btn-sm btn-danger" title="Hapus"><i class="fa fa-trash"></i></button>
             <?php endif; ?>
@@ -453,17 +507,19 @@ $total_nilai = 0;
         <?php
       }
       ?>
+      <?php if($is_admin): ?>
       <tr style="background-color: #f0f0f0;font-weight: bold">
-        <td colspan="7" align="right">TOTAL NILAI PERSEDIAAN:</td>
+        <td colspan="8" align="right">TOTAL NILAI PERSEDIAAN:</td>
         <td align="right"><?=gantitides($total_nilai)?></td>
         <td></td>
       </tr>
+      <?php endif; ?>
       <?php
     } else {
       $nama_bulan = array('', 'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember');
       ?>
       <tr>
-        <td colspan="9" align="center" style="padding: 20px;">
+        <td colspan="<?= $is_admin ? 10 : 8 ?>" align="center" style="padding: 20px;">
           <div style="font-size: 11pt; color: #666;">
             <i class="fa fa-info-circle" style="font-size: 24pt; color: #4CAF50; margin-bottom: 10px;"></i><br>
             <?php if($filter_bulan_tahun == 1): ?>

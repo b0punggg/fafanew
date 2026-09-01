@@ -10,6 +10,8 @@ include 'cekmasuk.php';
 include 'config.php';
 include 'f_cetak_jual_item_helper.php';
 
+$is_admin = (isset($_SESSION['kodepemakai']) && $_SESSION['kodepemakai'] == '2');
+
 $connect = opendtcek();
 if(!$connect){
   exit("Koneksi database gagal");
@@ -35,6 +37,18 @@ if($semua != 1 && ($bulan=='' || $tahun=='')){
 if(strlen($bulan) == 1 && $bulan !== ''){
   $bulan = '0'.$bulan;
 }
+
+$keluar_date_sql = ($semua != 1 && $bulan !== '' && $tahun !== '')
+  ? " AND MONTH(dum_jual.tgl_jual)='$bulan' AND YEAR(dum_jual.tgl_jual)='$tahun'"
+  : '';
+$sql_from_keluar = "(
+  SELECT dum_jual.kd_brg, SUM(dum_jual.qty_brg) AS qty_keluar
+  FROM dum_jual
+  WHERE dum_jual.kd_toko='$kd_toko'
+    AND (dum_jual.ket IS NULL OR dum_jual.ket <> 'RETUR BARANG')
+    $keluar_date_sql
+  GROUP BY dum_jual.kd_brg
+) klr";
 
 $nama_bulan = array(
   "01"=>"Januari","02"=>"Februari","03"=>"Maret","04"=>"April",
@@ -71,7 +85,8 @@ if($semua == 1){
     b.nm_bag,
     sub.stok_juals,
     sub.hrg_beli,
-    (sub.stok_juals * sub.hrg_beli) AS nilai_persediaan
+    (sub.stok_juals * sub.hrg_beli) AS nilai_persediaan,
+    COALESCE(klr.qty_keluar, 0) AS qty_keluar
   FROM (
     SELECT 
       beli_brg.kd_brg,
@@ -87,6 +102,7 @@ if($semua == 1){
   LEFT JOIN mas_brg m ON sub.kd_brg = m.kd_brg AND m.kd_toko = '$kd_toko'
   LEFT JOIN supplier s ON sub.kd_sup = s.kd_sup
   LEFT JOIN bag_brg b ON sub.id_bag = b.no_urut
+  LEFT JOIN $sql_from_keluar ON klr.kd_brg = sub.kd_brg
   WHERE 1=1 $brand_sql
   ORDER BY COALESCE(m.nm_brg, sub.kd_brg) ASC";
 } else {
@@ -107,7 +123,8 @@ if($semua == 1){
     b.nm_bag,
     sub.stok_juals,
     sub.hrg_beli,
-    (sub.stok_juals * sub.hrg_beli) AS nilai_persediaan
+    (sub.stok_juals * sub.hrg_beli) AS nilai_persediaan,
+    COALESCE(klr.qty_keluar, 0) AS qty_keluar
   FROM (
     SELECT 
       beli_brg.kd_brg,
@@ -123,6 +140,7 @@ if($semua == 1){
   LEFT JOIN mas_brg m ON sub.kd_brg = m.kd_brg AND m.kd_toko = '$kd_toko'
   LEFT JOIN supplier s ON sub.kd_sup = s.kd_sup
   LEFT JOIN bag_brg b ON sub.id_bag = b.no_urut
+  LEFT JOIN $sql_from_keluar ON klr.kd_brg = sub.kd_brg
   WHERE 1=1 $brand_sql
   ORDER BY COALESCE(m.nm_brg, sub.kd_brg) ASC";
 }
@@ -132,8 +150,9 @@ if(!$q){
   exit("Query gagal: ".mysqli_error($connect));
 }
 
+$colspan_brand = $is_admin ? 9 : 7;
 echo "<table border='1'>
-<tr><td colspan='8'><b>Brand: ".htmlspecialchars($brand_text)."</b></td></tr>
+<tr><td colspan='{$colspan_brand}'><b>Brand: ".htmlspecialchars($brand_text)."</b></td></tr>
 <tr style='background:#4CAF50;color:white;font-weight:bold'>
   <th>No</th>
   <th>Kode Barang</th>
@@ -141,18 +160,26 @@ echo "<table border='1'>
   <th>Supplier</th>
   <th>Bagian</th>
   <th>Stok</th>
+  <th>Jml. Keluar</th>";
+if($is_admin){
+  echo "
   <th>Harga Beli</th>
-  <th>Nilai Persediaan</th>
+  <th>Nilai Persediaan</th>";
+}
+echo "
 </tr>";
 
 $no = 1;
 $total = 0;
 
 while($r = mysqli_fetch_assoc($q)){
-  $total += $r['nilai_persediaan'];
+  if($is_admin){
+    $total += $r['nilai_persediaan'];
+  }
   $nm_sup = isset($r['nm_sup']) ? htmlspecialchars($r['nm_sup']) : '';
   $nm_bag = isset($r['nm_bag']) ? htmlspecialchars($r['nm_bag']) : '';
   $nm_brg = isset($r['nm_brg']) ? htmlspecialchars($r['nm_brg']) : '';
+  $qty_keluar = isset($r['qty_keluar']) ? $r['qty_keluar'] : 0;
   echo "<tr>
     <td>{$no}</td>
     <td>".htmlspecialchars($r['kd_brg'])."</td>
@@ -160,16 +187,23 @@ while($r = mysqli_fetch_assoc($q)){
     <td>{$nm_sup}</td>
     <td>{$nm_bag}</td>
     <td align='right'>".number_format($r['stok_juals'],0,',','.')."</td>
+    <td align='right'>".number_format($qty_keluar,0,',','.')."</td>";
+  if($is_admin){
+    echo "
     <td align='right'>".number_format($r['hrg_beli'],0,',','.')."</td>
-    <td align='right'>".number_format($r['nilai_persediaan'],0,',','.')."</td>
+    <td align='right'>".number_format($r['nilai_persediaan'],0,',','.')."</td>";
+  }
+  echo "
   </tr>";
   $no++;
 }
 
-echo "<tr style='font-weight:bold'>
-  <td colspan='7' align='right'>TOTAL</td>
-  <td align='right'>".number_format($total,0,',','.')."</td>
-</tr>";
+if($is_admin){
+  echo "<tr style='font-weight:bold'>
+    <td colspan='8' align='right'>TOTAL</td>
+    <td align='right'>".number_format($total,0,',','.')."</td>
+  </tr>";
+}
 echo "</table>";
 
 mysqli_close($connect);
