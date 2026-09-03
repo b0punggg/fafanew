@@ -101,7 +101,11 @@
 
         $sort = isset($_POST['sort']) ? $_POST['sort'] : 'abjad';
         $order_sql = 'nm_member ASC';
-        if (isset($kolom['poin'])) {
+        if ($sort === 'id_asc') {
+          $order_sql = 'no_urut ASC';
+        } elseif ($sort === 'id_desc') {
+          $order_sql = 'no_urut DESC';
+        } elseif (isset($kolom['poin'])) {
           if ($sort === 'poin_desc') {
             $order_sql = 'poin DESC, nm_member ASC';
           } elseif ($sort === 'poin_asc') {

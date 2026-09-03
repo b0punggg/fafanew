@@ -80,15 +80,17 @@
 
     function updateExportMemberLinks(){
       var keyword = document.getElementById('keyktmember') ? document.getElementById('keyktmember').value : '';
+      var sort = document.getElementById('sort_member') ? document.getElementById('sort_member').value : 'abjad';
       var encodedKeyword = encodeURIComponent(keyword);
+      var encodedSort = encodeURIComponent(sort);
       var excelBtn = document.getElementById('btn-export-member-excel');
       var pdfBtn = document.getElementById('btn-export-member-pdf');
 
       if(excelBtn){
-        excelBtn.href = 'm_member_export_excel.php?keyword=' + encodedKeyword;
+        excelBtn.href = 'm_member_export_excel.php?keyword=' + encodedKeyword + '&sort=' + encodedSort;
       }
       if(pdfBtn){
-        pdfBtn.href = 'm_member_export_pdf.php?keyword=' + encodedKeyword;
+        pdfBtn.href = 'm_member_export_pdf.php?keyword=' + encodedKeyword + '&sort=' + encodedSort;
       }
     }
 
@@ -191,6 +193,7 @@
                 <div class="input-group" style="margin-top: 15px">
                   <select id="sort_member" class="form-control hrf_arial" style="font-size: 10pt;height: 30px;max-width: 165px;margin-right: 4px;" onchange="carimember(1, true);" title="Urutkan data">
                     <option value="abjad">Abjad A–Z</option>
+                    <option value="id_asc">ID Member</option>
                     <option value="poin_desc">Poin tertinggi</option>
                     <option value="poin_asc">Poin terendah</option>
                   </select>

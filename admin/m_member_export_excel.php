@@ -49,7 +49,21 @@ if(count($filter_where) > 0){
   $where_sql = " WHERE ".implode(" AND ", $filter_where);
 }
 
-$q = mysqli_query($connect, "SELECT * FROM member $where_sql ORDER BY nm_member ASC");
+$sort = isset($_GET['sort']) ? $_GET['sort'] : 'abjad';
+$order_sql = 'nm_member ASC';
+if ($sort === 'id_asc') {
+  $order_sql = 'no_urut ASC';
+} elseif ($sort === 'id_desc') {
+  $order_sql = 'no_urut DESC';
+} elseif (isset($kolom['poin'])) {
+  if ($sort === 'poin_desc') {
+    $order_sql = 'poin DESC, nm_member ASC';
+  } elseif ($sort === 'poin_asc') {
+    $order_sql = 'poin ASC, nm_member ASC';
+  }
+}
+
+$q = mysqli_query($connect, "SELECT * FROM member $where_sql ORDER BY $order_sql");
 if(!$q){
   exit("Query member gagal: ".mysqli_error($connect));
 }
